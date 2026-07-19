@@ -1,0 +1,4 @@
+interface:
+  display_name: "設計・差分レビュー"
+  short_description: "仕様整合、設計品質、回帰リスク、テスト不足をレビュー"
+  default_prompt: "Use $review-design-diff to review the current changes against the project specifications."

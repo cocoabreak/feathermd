@@ -1,0 +1,11 @@
+# cargo-audit 設定
+
+[advisories]
+ignore = [
+  # quick-xml 0.39.4 (tauri-utils -> plist の間接依存、直接依存ではない)。
+  # plist 1.9.0（crates.io最新）がまだ quick-xml 0.41 系に追従していないため、
+  # 上流(plist/tauri-utils)の修正版リリースを待つ。修正版が出次第 `cargo update` して本行を削除する。
+  # 確認日: 2026-07-02
+  "RUSTSEC-2026-0194",
+  "RUSTSEC-2026-0195",
+]

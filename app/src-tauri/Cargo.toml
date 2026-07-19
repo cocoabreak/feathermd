@@ -1,0 +1,60 @@
+[package]
+name = "feathermd"
+version = "0.1.0"
+description = "FeatherMD, a lightweight read-only Markdown viewer"
+authors = ["Hirofumi Akiyama"]
+license = "MIT"
+repository = "https://github.com/cocoabreak/feathermd"
+homepage = "https://github.com/cocoabreak/feathermd"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[lib]
+# The `_lib` suffix may seem redundant but it is necessary
+# to make the lib name unique and wouldn't conflict with the bin name.
+# This seems to be only an issue on Windows, see https://github.com/rust-lang/cargo/issues/8519
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-opener = "2"
+tauri-plugin-store = "2"
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+notify = "8"
+base64 = "0.22"
+# cookie 0.18.1 が time 0.3.52+ の Parsable::parse 変更と非互換なためピン留め
+time = ">=0.3.0, <0.3.52"
+ignore = "0.4.28"
+regex = "1.13.0"
+open = "5.4.0"
+sys-locale = "0.3"
+pulldown-cmark = { version = "0.13.4", default-features = false }
+zip = { version = "=8.6.0", default-features = false, features = ["deflate-flate2-zlib-rs", "deflate64"] }
+semver = "1.0.28"
+ureq = { version = "3.3.0", default-features = false, features = ["rustls"] }
+
+[target.'cfg(any(target_os = "macos", windows, target_os = "linux"))'.dependencies]
+tauri-plugin-single-instance = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows-sys = { version = "0.61", features = ["Win32_Foundation", "Win32_Security", "Win32_Storage_FileSystem", "Win32_System_LibraryLoader", "Win32_System_Registry", "Win32_UI_Shell"] }
+
+[target.'cfg(target_os = "macos")'.dependencies]
+libc = "0.2"
+
+[dev-dependencies]
+tempfile = "3"
+
+[profile.release]
+opt-level = "z"     # サイズ最小化を最優先 (「s」でも可、Rust処理が最小限のためとりあえずサイズ優先を選択)
+lto = true          # リンク時最適化（Link Time Optimization）を有効化
+codegen-units = 1   # コード生成ユニット数を1にして最適化を最大化
+panic = "abort"     # パニック時のスタックトレース展開を無効化してコードを削減
+strip = true        # デバッグ情報とシンボルテーブルを完全に削除

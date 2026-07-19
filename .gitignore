@@ -1,0 +1,16 @@
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Logs
+*.log
+app/e2e/artifacts/
+
+# 環境設定（アーキテクチャ確定後に拡充）
+.env
+.env.local

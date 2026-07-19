@@ -1,0 +1,235 @@
+name: Release
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    permissions:
+      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: [macos-latest, ubuntu-22.04, windows-latest]
+
+    runs-on: ${{ matrix.platform }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: Validate release tag and draft state
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          bash app/scripts/check-versions.sh
+          version=$(node -p "require('./app/package.json').version")
+          expected_tag="v${version}"
+          if [[ "${GITHUB_REF_TYPE}" != "tag" || "${GITHUB_REF_NAME}" != "${expected_tag}" ]]; then
+            echo "Release ref must be ${expected_tag}, got ${GITHUB_REF_TYPE}:${GITHUB_REF_NAME}" >&2
+            exit 1
+          fi
+
+          releases_json=$(gh api --paginate --slurp \
+            "repos/${GITHUB_REPOSITORY}/releases?per_page=100")
+          matching_releases=$(jq -c \
+            --arg tag "${expected_tag}" \
+            '[.[][] | select(.tag_name == $tag)]' \
+            <<< "${releases_json}")
+          matching_count=$(jq 'length' <<< "${matching_releases}")
+          if [[ "${matching_count}" -gt 1 ]]; then
+            echo "Multiple releases exist for ${expected_tag}; refusing to modify their assets." >&2
+            exit 1
+          fi
+          if [[ "${matching_count}" -eq 1 ]]; then
+            existing_draft=$(jq -r '.[0].draft' <<< "${matching_releases}")
+            if [[ "${existing_draft}" != "true" ]]; then
+              echo "Release ${expected_tag} is already published; refusing to modify its assets." >&2
+              exit 1
+            fi
+          fi
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+
+      - name: Install dependencies (Ubuntu only)
+        if: matrix.platform == 'ubuntu-22.04'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: app
+
+      - name: Build and Release Tauri App
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          projectPath: app
+          tagName: v__VERSION__ # automatically replaces \_\_VERSION\_\_ with the app version
+          releaseName: "FeatherMD v__VERSION__"
+          releaseBody: |
+            FeatherMD v__VERSION__ is available.
+
+            FeatherMD is a read-only viewer for local Markdown files and Markdown documents stored in ZIP archives. It includes Mermaid and KaTeX rendering, search and quick navigation, session restoration, large-document safeguards, and privacy controls for external images.
+
+            On Windows, choose an MSI or NSIS installer for a standard installation, or the portable ZIP to run without installation. These binaries are currently unsigned and may trigger Microsoft Defender SmartScreen. Download FeatherMD only from this official release page.
+
+            Linux and macOS artifacts are provided on a best-effort basis. macOS builds are not notarized.
+
+            See the [versioned changelog](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/CHANGELOG.md) for details.
+          releaseDraft: true
+          prerelease: false
+          args: ${{ matrix.platform == 'macos-latest' && '--target universal-apple-darwin' || '' }}
+
+      - name: Create and upload Windows portable ZIP
+        if: matrix.platform == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          $version = (Get-Content app/package.json | ConvertFrom-Json).version
+          $binary = 'app/src-tauri/target/release/feathermd.exe'
+          if (-not (Test-Path -LiteralPath $binary)) {
+            throw "Portable binary not found: $binary"
+          }
+
+          $portableName = "FeatherMD_${version}_x64-portable"
+          $portableDir = Join-Path '${{ runner.temp }}' $portableName
+          $archivePath = Join-Path '${{ runner.temp }}' "$portableName.zip"
+          New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
+          Copy-Item -LiteralPath $binary -Destination (Join-Path $portableDir 'FeatherMD.exe')
+          Copy-Item -LiteralPath LICENSE, README.md, README.ja.md -Destination $portableDir
+          Compress-Archive -Path (Join-Path $portableDir '*') -DestinationPath $archivePath
+
+          $releaseJson = gh release view "v$version" --json isDraft
+          if ($LASTEXITCODE -ne 0) {
+            throw "Could not verify release v$version before portable upload."
+          }
+          $isDraft = ($releaseJson | ConvertFrom-Json).isDraft
+          if (-not $isDraft) {
+            throw "Release v$version is not a draft; refusing to replace its portable asset."
+          }
+          gh release upload "v$version" $archivePath
+          if ($LASTEXITCODE -ne 0) {
+            throw "Portable upload failed; an asset with the same name may already exist."
+          }
+
+  checksums:
+    name: Generate checksums
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Generate and upload SHA-256 checksums
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          release_metadata=$(gh release view "${GITHUB_REF_NAME}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --json databaseId,isDraft,tagName)
+          release_id=$(jq -r '.databaseId' <<< "${release_metadata}")
+          release_tag=$(jq -r '.tagName' <<< "${release_metadata}")
+          if [[ -z "${release_id}" || "${release_tag}" != "${GITHUB_REF_NAME}" ]]; then
+            echo "Could not resolve the draft release for ${GITHUB_REF_NAME}." >&2
+            exit 1
+          fi
+          release_endpoint="repos/${GITHUB_REPOSITORY}/releases/${release_id}"
+          snapshot_state() {
+            jq -c \
+              '[.draft, ([.assets[] | select(.name != "SHA256SUMS.txt") | [.id, .name, .size, .digest, .updated_at]] | sort_by(.[1]))]'
+          }
+
+          release_json=$(gh api "${release_endpoint}")
+          is_draft=$(jq -r '.draft' <<< "${release_json}")
+          if [[ "${is_draft}" != "true" ]]; then
+            echo "Release ${GITHUB_REF_NAME} is not a draft; refusing to upload its checksum file." >&2
+            exit 1
+          fi
+
+          before_state=$(snapshot_state <<< "${release_json}")
+          mapfile -t assets < <(
+            jq -r \
+              '[.assets[] | select(.name != "SHA256SUMS.txt")] | sort_by(.name)[] | @base64' \
+              <<< "${release_json}"
+          )
+          if [[ "${#assets[@]}" -eq 0 ]]; then
+            echo "The draft release has no assets to checksum." >&2
+            exit 1
+          fi
+
+          mkdir release-assets
+          for encoded_asset in "${assets[@]}"; do
+            asset_json=$(base64 --decode <<< "${encoded_asset}")
+            asset_id=$(jq -r '.id' <<< "${asset_json}")
+            asset_name=$(jq -r '.name' <<< "${asset_json}")
+            expected_size=$(jq -r '.size' <<< "${asset_json}")
+            expected_digest=$(jq -r '.digest // empty' <<< "${asset_json}")
+
+            if [[ -z "${asset_name}" || "${asset_name}" == "." || "${asset_name}" == ".." ||
+              "${asset_name}" == */* || "${asset_name}" == *\\* ]]; then
+              echo "Release asset has an unsafe file name: ${asset_name}" >&2
+              exit 1
+            fi
+
+            asset_path="release-assets/${asset_name}"
+            if [[ -e "${asset_path}" ]]; then
+              echo "Duplicate release asset name: ${asset_name}" >&2
+              exit 1
+            fi
+
+            gh api "repos/${GITHUB_REPOSITORY}/releases/assets/${asset_id}" \
+              --header 'Accept: application/octet-stream' \
+              > "${asset_path}"
+
+            actual_size=$(stat --format='%s' -- "${asset_path}")
+            if [[ "${actual_size}" != "${expected_size}" ]]; then
+              echo "Release asset size changed for ${asset_name}." >&2
+              exit 1
+            fi
+
+            if [[ -n "${expected_digest}" ]]; then
+              actual_digest="sha256:$(sha256sum -- "${asset_path}" | cut -d ' ' -f 1)"
+              if [[ "${actual_digest}" != "${expected_digest}" ]]; then
+                echo "Release asset digest changed for ${asset_name}." >&2
+                exit 1
+              fi
+            fi
+          done
+
+          : > release-assets/SHA256SUMS.txt
+          for encoded_asset in "${assets[@]}"; do
+            asset_json=$(base64 --decode <<< "${encoded_asset}")
+            asset_name=$(jq -r '.name' <<< "${asset_json}")
+            (
+              cd release-assets
+              sha256sum -- "${asset_name}"
+            ) >> release-assets/SHA256SUMS.txt
+          done
+          test -s release-assets/SHA256SUMS.txt
+
+          after_json=$(gh api "${release_endpoint}")
+          after_state=$(snapshot_state <<< "${after_json}")
+          is_draft=$(jq -r '.draft' <<< "${after_json}")
+          if [[ "${is_draft}" != "true" || "${after_state}" != "${before_state}" ]]; then
+            echo "Draft state or release assets changed while checksums were generated." >&2
+            exit 1
+          fi
+
+          gh release upload "${GITHUB_REF_NAME}" release-assets/SHA256SUMS.txt \
+            --repo "${GITHUB_REPOSITORY}"

@@ -1,0 +1,4 @@
+interface:
+  display_name: "セキュリティレビュー"
+  short_description: "信頼境界、入力処理、権限、注入リスクを重点レビュー"
+  default_prompt: "Use $review-security to perform a security review of the current changes."

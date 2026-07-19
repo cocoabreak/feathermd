@@ -1,0 +1,173 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  security-audit:
+    name: Security audit (npm + cargo)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      - name: npm audit (fail on high/critical)
+        working-directory: app
+        run: npm audit --audit-level=high
+
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: cargo audit (fail on vulnerabilities)
+        working-directory: app/src-tauri
+        run: cargo audit
+
+  security-behavior:
+    name: Security behavior (XSS sanitization / path boundary)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - working-directory: app
+        run: npm ci
+
+      # 悪意ある .md を開いた際の防御を振る舞いレベルで検証する専用ゲート。
+      # - sanitize.test.ts: <script>/イベントハンドラ/javascript:/iframe・object・embed/form の除去（XSS防御）
+      # - security.test.ts: リンク・画像のルート内外判定（isWithinDir）
+      # Rust側の信頼境界（AllowedRoots・危険フォルダ拒否・パストラバーサル・canonicalize）は
+      # test-backend の cargo test（file.rs のユニットテスト）で検証している。
+      - name: Sanitization & path-boundary behavior tests
+        working-directory: app
+        run: npx vitest run src/lib/markdown/sanitize.test.ts src/lib/actions/security.test.ts
+
+  lint-frontend:
+    name: Lint frontend (Prettier / ESLint / svelte-check)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Check version sync (package.json / tauri.conf.json / Cargo.toml)
+        working-directory: app
+        run: bash scripts/check-versions.sh
+
+      - working-directory: app
+        run: npm ci
+
+      - name: Prettier check
+        working-directory: app
+        run: npx prettier --check .
+
+      - name: ESLint
+        working-directory: app
+        run: npm run lint
+
+      - name: svelte-check
+        working-directory: app
+        run: npm run check
+
+  test-frontend:
+    name: Frontend tests (Vitest)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - working-directory: app
+        run: npm ci
+
+      - name: Run tests with coverage
+        working-directory: app
+        run: npm run test -- --coverage
+
+      - name: Upload coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-coverage
+          path: app/coverage/
+          retention-days: 7
+
+  test-backend:
+    name: Backend (Rust / Tauri, Windows)
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      - name: cargo fmt --check
+        working-directory: app/src-tauri
+        run: cargo fmt --check
+
+      - name: cargo clippy
+        working-directory: app/src-tauri
+        run: cargo clippy --all-targets -- -D warnings
+
+      - name: cargo test
+        working-directory: app/src-tauri
+        run: cargo test --lib --verbose
+
+  windows-desktop-build:
+    name: Windows desktop build
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Rust cache
+        uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri
+
+      - working-directory: app
+        run: npm ci
+
+      - name: Verify production E2E hooks are absent
+        working-directory: app
+        run: npm run build && npm run e2e:check-production
+
+      - name: Build Tauri app
+        working-directory: app/src-tauri
+        run: cargo build --locked --no-default-features
