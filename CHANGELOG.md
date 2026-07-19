@@ -2,7 +2,7 @@
 
 All notable changes to FeatherMD are documented in this file.
 
-## [0.1.0] - 2026-07-19
+## [0.2.2] - 2026-07-20
 
 The first public release of FeatherMD.
 
@@ -47,4 +47,4 @@ The first public release of FeatherMD.
 - External images are not loaded silently under the default ask policy, and large documents do not execute rich Markdown rendering in safe mode.
 - Startup update checks contact GitHub Releases by default but do not send document contents or local file paths and can be disabled in Settings.
 
-[0.1.0]: https://github.com/cocoabreak/feathermd/releases/tag/v0.1.0
+[0.2.2]: https://github.com/cocoabreak/feathermd/releases/tag/v0.2.2

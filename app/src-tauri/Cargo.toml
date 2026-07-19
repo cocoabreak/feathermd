@@ -1,6 +1,6 @@
 [package]
 name = "feathermd"
-version = "0.1.0"
+version = "0.2.2"
 description = "FeatherMD, a lightweight read-only Markdown viewer"
 authors = ["Hirofumi Akiyama"]
 license = "MIT"
