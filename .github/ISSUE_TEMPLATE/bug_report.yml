@@ -1,0 +1,79 @@
+name: Bug report / バグ報告
+description: Report a reproducible problem in FeatherMD / FeatherMDで再現する問題を報告する
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for reporting a problem. English and Japanese are both welcome.
+        問題のご報告ありがとうございます。日本語・英語のどちらでも投稿できます。
+
+        Do not report suspected security vulnerabilities here. Use [private vulnerability reporting](https://github.com/cocoabreak/feathermd/security/advisories/new).
+        セキュリティ脆弱性の疑いがある場合は、公開Issueではなく[非公開の脆弱性報告](https://github.com/cocoabreak/feathermd/security/advisories/new)を利用してください。
+
+  - type: input
+    id: version
+    attributes:
+      label: FeatherMD version / FeatherMDのバージョン
+      placeholder: e.g. 0.2.2 or commit SHA
+    validations:
+      required: true
+
+  - type: input
+    id: operating-system
+    attributes:
+      label: Operating system / OS
+      placeholder: e.g. Windows 11 24H2, Ubuntu 24.04, macOS 15
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce / 再現手順
+      description: Provide the smallest reliable sequence that reproduces the problem. / 問題を再現できる最小限の手順を記載してください。
+      placeholder: |
+        1. Open ...
+        2. Select ...
+        3. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior / 期待する動作
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior / 実際の動作
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs or minimal sample / ログまたは最小サンプル
+      description: Include only the minimum data needed to reproduce the issue. Remove personal paths, secrets, and unrelated document contents. / 再現に必要な最小限の情報だけを記載し、個人のパス、秘密情報、無関係な文書内容は除去してください。
+      render: shell
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context / 補足
+      description: Add screenshots or other relevant information when useful. / 必要に応じてスクリーンショットなどを追加してください。
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist / 確認
+      options:
+        - label: I searched existing issues for the same problem. / 同じ問題のIssueがないことを確認しました。
+          required: true
+        - label: This report does not contain secrets, personal data, or unrelated sensitive files. / 秘密情報、個人情報、無関係な機密ファイルを含めていません。
+          required: true

@@ -1,0 +1,50 @@
+name: Feature request / 機能要望
+description: Suggest a focused improvement for FeatherMD / FeatherMDの機能改善を提案する
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for suggesting an improvement. English and Japanese are both welcome.
+        機能改善のご提案ありがとうございます。日本語・英語のどちらでも投稿できます。
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or use case / 解決したい課題
+      description: Describe the viewing workflow or problem that motivated this request. / 要望の背景となる閲覧操作や課題を記載してください。
+      placeholder: What is difficult or unavailable today?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed behavior / 希望する動作
+      description: Describe how you would like FeatherMD to behave. / FeatherMDがどのように動作するとよいか記載してください。
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered / 検討した代替手段
+      description: If applicable, describe current workarounds or alternatives. / 現在の回避策や代替案があれば記載してください。
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context / 補足
+      description: Add screenshots, examples, or related links when useful. Do not include sensitive local data. / 必要に応じて画像、例、関連リンクを追加してください。機密性のあるローカル情報は含めないでください。
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Checklist / 確認
+      options:
+        - label: I searched existing issues for the same request. / 同じ要望のIssueがないことを確認しました。
+          required: true
+        - label: I understand that opening an issue does not guarantee implementation or a release date. / Issueの作成が実装やリリース時期を確約するものではないことを理解しています。
+          required: true
