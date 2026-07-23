@@ -69,6 +69,63 @@ try {
     await driver.waitFor("document.querySelector('.mermaid-rendered svg') !== null", {
       timeoutMs: 30_000,
     });
+    const labelMetrics = await driver.evaluate(`(() => {
+      const labels = [...document.querySelectorAll('.mermaid-rendered .nodeLabel p')];
+      const measure = (text) => {
+        const label = labels.find((element) => element.textContent.includes(text));
+        if (!label) return null;
+        const lineHeight = Number.parseFloat(getComputedStyle(label).lineHeight);
+        const labelRect = label.getBoundingClientRect();
+        const node = label.closest('g.node');
+        const foreignRect = node?.querySelector('foreignObject')?.getBoundingClientRect();
+        const shapeRect = node?.querySelector('rect, polygon, path')?.getBoundingClientRect();
+        const contains = (outer) =>
+          outer &&
+          labelRect.top >= outer.top - 1 &&
+          labelRect.right <= outer.right + 1 &&
+          labelRect.bottom <= outer.bottom + 1 &&
+          labelRect.left >= outer.left - 1;
+        return {
+          hasBreak: label.querySelector('br') !== null,
+          lines: Math.round(label.offsetHeight / lineHeight),
+          lineHeight,
+          containedByForeignObject: contains(foreignRect),
+          containedByShape: contains(shapeRect),
+        };
+      };
+      const paragraph = [...document.querySelectorAll('.markdown-body > p')]
+        .find((element) => element.textContent.includes('regular paragraph'));
+      return {
+        autoWrapped: measure('UTF-8'),
+        rounded: measure('Long rounded'),
+        diamond: measure('Diamond node'),
+        stadium: measure('Stadium node'),
+        single: measure('Single line'),
+        paragraphLineHeight: paragraph ? getComputedStyle(paragraph).lineHeight : null,
+      };
+    })()`);
+    assert.equal(labelMetrics.autoWrapped.hasBreak, false);
+    assert.ok(labelMetrics.autoWrapped.lines >= 2);
+    assert.equal(labelMetrics.autoWrapped.lineHeight, 24);
+    assert.equal(labelMetrics.autoWrapped.containedByForeignObject, true);
+    assert.equal(labelMetrics.autoWrapped.containedByShape, true);
+    for (const shape of ["rounded", "diamond", "stadium"]) {
+      assert.deepEqual(labelMetrics[shape], {
+        hasBreak: true,
+        lines: 2,
+        lineHeight: 24,
+        containedByForeignObject: true,
+        containedByShape: true,
+      });
+    }
+    assert.deepEqual(labelMetrics.single, {
+      hasBreak: false,
+      lines: 1,
+      lineHeight: 24,
+      containedByForeignObject: true,
+      containedByShape: true,
+    });
+    assert.equal(labelMetrics.paragraphLineHeight, "28px");
   });
 
   await test("不正なMermaidをエラー表示できる", async () => {
