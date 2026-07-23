@@ -29,4 +29,13 @@ describe("MarkdownViewer styles", () => {
     expect(source).toContain(".markdown-body :global(.footnotes)");
     expect(source).toContain(".markdown-body :global(.footnote-backref)");
   });
+
+  it("MermaidのノードラベルだけをMermaid既定の行高へ戻す", () => {
+    expect(source).toMatch(
+      /\.markdown-body :global\(\.mermaid-rendered \.nodeLabel p\)\s*{\s*line-height: 1\.5;\s*}/
+    );
+    expect(source).toMatch(
+      /\.markdown-body :global\(p\)\s*{\s*margin-bottom: 1rem;\s*line-height: 1\.75;\s*}/
+    );
+  });
 });

@@ -987,6 +987,9 @@
   .markdown-body :global(.mermaid-rendered svg) {
     max-width: 100%;
   }
+  .markdown-body :global(.mermaid-rendered .nodeLabel p) {
+    line-height: 1.5;
+  }
 
   .markdown-body :global(.lightbox-trigger-wrapper) {
     position: relative;

@@ -61,7 +61,24 @@ export function createFixtures(root) {
     basic,
     `# Smoke marker\n\nsmoke-marker\n\n${Array.from({ length: 300 }, (_, i) => `## Section ${i}\n\nline ${i}`).join("\n\n")}\n`
   );
-  writeFileSync(validMermaid, "# Mermaid\n\n```mermaid\ngraph TD\n  A --> B\n```\n");
+  writeFileSync(
+    validMermaid,
+    [
+      "# Mermaid",
+      "",
+      "```mermaid",
+      "graph TD",
+      "  F[Filter: SetCharacterEncodingFilter UTF-8] --> S[ActionServlet: action]",
+      "  Rounded(Long rounded node label<br/>with explicit break)",
+      "  Diamond{Diamond node label<br/>with explicit break}",
+      "  Stadium([Stadium node label<br/>with explicit break])",
+      "  Single[Single line]",
+      "```",
+      "",
+      "regular paragraph",
+      "",
+    ].join("\n")
+  );
   writeFileSync(invalidMermaid, "# Broken Mermaid\n\n```mermaid\ngraph TD\n  A -- ???\n```\n");
   writeFileSync(belowLimit, fixedSizeMarkdown(LARGE_MARKDOWN_BYTES - 1, "Below limit"));
   writeFileSync(atLimit, fixedSizeMarkdown(LARGE_MARKDOWN_BYTES, "At limit"));
