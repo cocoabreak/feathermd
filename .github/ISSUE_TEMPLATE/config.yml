@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and discussions / 質問・一般的な相談
+    url: https://github.com/cocoabreak/feathermd/discussions
+    about: Ask usage questions or discuss broader ideas. / 使い方の質問や広いアイデアの相談はこちらです。
+  - name: Private security report / 非公開の脆弱性報告
+    url: https://github.com/cocoabreak/feathermd/security/advisories/new
+    about: Report suspected security vulnerabilities privately. / セキュリティ脆弱性の疑いはこちらへ非公開で報告してください。
