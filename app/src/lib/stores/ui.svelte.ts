@@ -1,7 +1,7 @@
 function createUiStore() {
   let settingsPanelOpen = $state(false);
   let aboutDialogOpen = $state(false);
-  let sidebarActiveTab = $state<"explorer" | "search" | "backlinks">("explorer");
+  let sidebarActiveTab = $state<"explorer" | "search" | "links">("explorer");
 
   return {
     get settingsPanelOpen() {
@@ -25,7 +25,7 @@ function createUiStore() {
     closeAbout() {
       aboutDialogOpen = false;
     },
-    setSidebarActiveTab(tab: "explorer" | "search" | "backlinks") {
+    setSidebarActiveTab(tab: "explorer" | "search" | "links") {
       sidebarActiveTab = tab;
     },
   };

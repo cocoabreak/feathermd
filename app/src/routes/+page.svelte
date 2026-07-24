@@ -49,7 +49,7 @@
   import { i18n } from "$lib/i18n/index.svelte";
   import { updateCheckStore } from "$lib/stores/update-check.svelte";
   import { pickerStore } from "$lib/stores/picker.svelte";
-  import { backlinksStore } from "$lib/stores/backlinks.svelte";
+  import { linkInspectorStore } from "$lib/stores/links.svelte";
   import { searchStore } from "$lib/stores/search.svelte";
   import { sessionUiStateStore } from "$lib/stores/session-ui-state.svelte";
 
@@ -376,7 +376,7 @@
 
     keepListener(
       listen<string>("file-changed", async (event) => {
-        backlinksStore.invalidate();
+        linkInspectorStore.invalidate();
         const changedPath = event.payload;
         const normalizedChangedPath = normalizePath(changedPath);
         try {
@@ -482,7 +482,7 @@
 
     keepListener(
       listen<string>("file-deleted", (event) => {
-        backlinksStore.invalidate();
+        linkInspectorStore.invalidate();
         const deletedPath = event.payload;
         const normalizedDeletedPath = normalizePath(deletedPath);
         const deletedArchiveSourceIds = new Set(
@@ -520,7 +520,7 @@
     // エクスプローラー表示中レベルのファイル増減（explorer-watch）
     keepListener(
       listen<string>("directory-changed", (event) => {
-        backlinksStore.invalidate();
+        linkInspectorStore.invalidate();
         void refreshDirectory(event.payload);
       })
     );

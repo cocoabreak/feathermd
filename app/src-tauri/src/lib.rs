@@ -6,7 +6,7 @@ use commands::file::{
 };
 use commands::launch::LaunchState;
 use commands::search::SearchState;
-use commands::sources::{BacklinkIndexState, SourceRegistry};
+use commands::sources::{LinkIndexState, SourceRegistry};
 use commands::update::UpdateCheckerState;
 use commands::watcher::{CustomCssWatcherState, DirWatcherState, WatcherState, WatcherWorker};
 use commands::wiki::WikiIndexState;
@@ -78,7 +78,7 @@ pub fn run() {
         .manage(LaunchState::new())
         .manage(SearchState::new())
         .manage(SourceRegistry::new())
-        .manage(BacklinkIndexState::new())
+        .manage(LinkIndexState::new())
         .manage(UpdateCheckerState::default())
         .manage(WikiIndexState::new())
         .manage(AllowedRoots::new())
@@ -133,6 +133,7 @@ pub fn run() {
             commands::sources::search_source,
             commands::sources::resolve_source_wiki_links,
             commands::sources::list_source_backlinks,
+            commands::sources::get_source_link_context,
             commands::update::check_for_updates,
             commands::menu::set_native_theme,
             commands::menu::set_menu_language,

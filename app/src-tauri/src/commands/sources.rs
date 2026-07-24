@@ -82,6 +82,12 @@ const MAX_BACKLINK_REFERENCES: usize = 100_000;
 const MAX_BACKLINK_CANDIDATE_INSPECTIONS: usize = 1_000_000;
 const MAX_CACHED_BACKLINK_INDEXES: usize = 4;
 const BACKLINK_INDEX_TTL: Duration = Duration::from_secs(30);
+const MAX_LINK_EDGES_PER_DOCUMENT: usize = 2_000;
+const MAX_LINK_INDEX_EDGES: usize = 25_000;
+const MAX_LINK_STRINGS_PER_DOCUMENT: usize = 256 * 1024;
+const MAX_LINK_INDEX_STRINGS: usize = 8 * 1024 * 1024;
+const MAX_LINK_CONTEXT_ITEMS: usize = 500;
+const MAX_LINK_CONTEXT_BYTES: usize = 1024 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ZipEntryKind {
@@ -151,45 +157,92 @@ pub struct BacklinkResponse {
     truncated: bool,
 }
 
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum DocumentLinkKind {
+    Wiki,
+    Markdown,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentLinkEdge {
+    source: DocumentRef,
+    target: Option<DocumentRef>,
+    raw_target: Option<String>,
+    anchor: Option<String>,
+    kind: DocumentLinkKind,
+    reference_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct LinkContextSection {
+    items: Vec<DocumentLinkEdge>,
+    total: Option<usize>,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+pub struct LinkContextResponse {
+    outgoing: LinkContextSection,
+    incoming: LinkContextSection,
+    broken: LinkContextSection,
+    truncated: bool,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
-struct BacklinkCacheKey {
+struct LinkCacheKey {
     source_id: String,
     generation: u64,
     show_hidden_files: bool,
     respect_gitignore: bool,
+    include_wiki_links: bool,
 }
 
 #[derive(Clone)]
-struct CachedBacklinkIndex {
+struct IndexedLinkEdge {
+    source_path: String,
+    target_path: Option<String>,
+    raw_target: Option<String>,
+    anchor: Option<String>,
+    kind: DocumentLinkKind,
+    reference_count: usize,
+}
+
+#[derive(Clone)]
+struct CachedLinkIndex {
     created_at: Instant,
-    by_target: HashMap<String, Vec<BacklinkResult>>,
+    edges: Vec<IndexedLinkEdge>,
+    outgoing_by_source: HashMap<String, Vec<usize>>,
+    incoming_by_target: HashMap<String, Vec<usize>>,
+    broken_by_source: HashMap<String, Vec<usize>>,
     truncated: bool,
 }
 
 #[derive(Default)]
-struct BacklinkIndexInner {
-    indexes: HashMap<BacklinkCacheKey, CachedBacklinkIndex>,
-    in_flight: HashSet<BacklinkCacheKey>,
+struct LinkIndexInner {
+    indexes: HashMap<LinkCacheKey, CachedLinkIndex>,
+    in_flight: HashSet<LinkCacheKey>,
 }
 
 #[derive(Clone, Default)]
-pub struct BacklinkIndexState(Arc<Mutex<BacklinkIndexInner>>);
+pub struct LinkIndexState(Arc<Mutex<LinkIndexInner>>);
 
-impl BacklinkIndexState {
+impl LinkIndexState {
     pub fn new() -> Self {
         Self::default()
     }
 
     fn cached_or_reserve(
         &self,
-        key: &BacklinkCacheKey,
+        key: &LinkCacheKey,
         force_refresh: bool,
-    ) -> Result<Option<CachedBacklinkIndex>, String> {
+    ) -> Result<Option<CachedLinkIndex>, String> {
         let now = Instant::now();
         let mut state = self
             .0
             .lock()
-            .map_err(|_| "バックリンク索引のロックに失敗しました".to_string())?;
+            .map_err(|_| "リンク索引のロックに失敗しました".to_string())?;
         state
             .indexes
             .retain(|_, index| now.duration_since(index.created_at) < BACKLINK_INDEX_TTL);
@@ -199,7 +252,7 @@ impl BacklinkIndexState {
             }
         }
         if !state.in_flight.is_empty() {
-            return Err("バックリンク索引はすでに構築中です".to_string());
+            return Err("リンク索引はすでに構築中です".to_string());
         }
         state.in_flight.insert(key.clone());
         Ok(None)
@@ -207,13 +260,13 @@ impl BacklinkIndexState {
 
     fn finish(
         &self,
-        key: BacklinkCacheKey,
-        result: Result<CachedBacklinkIndex, String>,
-    ) -> Result<CachedBacklinkIndex, String> {
+        key: LinkCacheKey,
+        result: Result<CachedLinkIndex, String>,
+    ) -> Result<CachedLinkIndex, String> {
         let mut state = self
             .0
             .lock()
-            .map_err(|_| "バックリンク索引のロックに失敗しました".to_string())?;
+            .map_err(|_| "リンク索引のロックに失敗しました".to_string())?;
         state.in_flight.remove(&key);
         let mut index = result?;
         if state.indexes.len() >= MAX_CACHED_BACKLINK_INDEXES && !state.indexes.contains_key(&key) {
@@ -1420,7 +1473,51 @@ fn truncate_search_preview(line: &str) -> String {
     }
 }
 
-fn extract_wiki_targets(raw: &str, limit: usize) -> (Vec<String>, bool) {
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ExtractedDocumentLink {
+    raw_target: String,
+    anchor: Option<String>,
+    kind: DocumentLinkKind,
+}
+
+fn split_link_target(raw_target: &str) -> Option<(String, Option<String>)> {
+    let trimmed = raw_target.trim();
+    if trimmed.is_empty() || trimmed.contains('?') {
+        return None;
+    }
+    let (target, anchor) = trimmed
+        .split_once('#')
+        .map_or((trimmed, None), |(target, anchor)| {
+            let anchor = anchor.trim();
+            (target, (!anchor.is_empty()).then(|| anchor.to_string()))
+        });
+    let target = target.trim();
+    (!target.is_empty()).then(|| (target.to_string(), anchor))
+}
+
+fn has_uri_scheme(target: &str) -> bool {
+    let Some((scheme, _)) = target.split_once(':') else {
+        return false;
+    };
+    let mut chars = scheme.chars();
+    chars
+        .next()
+        .is_some_and(|first| first.is_ascii_alphabetic())
+        && chars.all(|character| {
+            character.is_ascii_alphanumeric() || matches!(character, '+' | '-' | '.')
+        })
+}
+
+fn is_absolute_link_target(target: &str) -> bool {
+    let normalized = target.replace('\\', "/");
+    normalized.starts_with('/')
+        || normalized
+            .as_bytes()
+            .get(1)
+            .is_some_and(|byte| *byte == b':')
+}
+
+fn extract_wiki_links(raw: &str, limit: usize) -> (Vec<ExtractedDocumentLink>, bool) {
     let mut excluded_ranges = Vec::new();
     let mut code_block_start = None;
     for (event, range) in Parser::new(raw).into_offset_iter() {
@@ -1487,11 +1584,11 @@ fn extract_wiki_targets(raw: &str, limit: usize) -> (Vec<String>, bool) {
             && !inner.contains('\n')
         {
             let raw_target = inner.split_once('|').map_or(inner, |(target, _)| target);
-            let target = raw_target
-                .split_once('#')
-                .map_or(raw_target, |(target, _)| target)
-                .trim();
-            if !target.is_empty() {
+            if let Some((target, anchor)) = split_link_target(raw_target) {
+                if is_absolute_link_target(&target) || has_uri_scheme(&target) {
+                    offset = candidate_end;
+                    continue;
+                }
                 if target.len() > super::wiki::MAX_WIKI_TARGET_BYTES {
                     truncated = true;
                     offset = candidate_end;
@@ -1500,7 +1597,11 @@ fn extract_wiki_targets(raw: &str, limit: usize) -> (Vec<String>, bool) {
                 if targets.len() >= limit {
                     return (targets, true);
                 }
-                targets.push(target.to_string());
+                targets.push(ExtractedDocumentLink {
+                    raw_target: target,
+                    anchor,
+                    kind: DocumentLinkKind::Wiki,
+                });
             }
         }
         offset = candidate_end;
@@ -1508,13 +1609,124 @@ fn extract_wiki_targets(raw: &str, limit: usize) -> (Vec<String>, bool) {
     (targets, truncated)
 }
 
-fn build_backlink_index(
+fn extract_markdown_links(raw: &str, limit: usize) -> (Vec<ExtractedDocumentLink>, bool) {
+    let mut links = Vec::new();
+    for event in Parser::new(raw) {
+        let Event::Start(Tag::Link { dest_url, .. }) = event else {
+            continue;
+        };
+        let destination = dest_url.as_ref().trim();
+        if destination.starts_with('#') || has_uri_scheme(destination) {
+            continue;
+        }
+        let Some((target, anchor)) = split_link_target(destination) else {
+            continue;
+        };
+        let target_lower = target.to_ascii_lowercase();
+        if !target_lower.ends_with(".md") && !target_lower.ends_with(".markdown") {
+            continue;
+        }
+        if target.len() > super::wiki::MAX_WIKI_TARGET_BYTES {
+            return (links, true);
+        }
+        if links.len() >= limit {
+            return (links, true);
+        }
+        links.push(ExtractedDocumentLink {
+            raw_target: target,
+            anchor,
+            kind: DocumentLinkKind::Markdown,
+        });
+    }
+    (links, false)
+}
+
+fn extract_document_links(
+    raw: &str,
+    include_wiki_links: bool,
+    limit: usize,
+) -> (Vec<ExtractedDocumentLink>, bool) {
+    let (mut links, mut truncated) = if include_wiki_links {
+        extract_wiki_links(raw, limit)
+    } else {
+        (Vec::new(), false)
+    };
+    let remaining = limit.saturating_sub(links.len());
+    let (markdown_links, markdown_truncated) = extract_markdown_links(raw, remaining);
+    links.extend(markdown_links);
+    truncated |= markdown_truncated;
+    (links, truncated)
+}
+
+#[cfg(test)]
+fn extract_wiki_targets(raw: &str, limit: usize) -> (Vec<String>, bool) {
+    let (links, truncated) = extract_wiki_links(raw, limit);
+    (
+        links.into_iter().map(|link| link.raw_target).collect(),
+        truncated,
+    )
+}
+
+enum MarkdownLinkResolution {
+    Resolved(String),
+    Missing,
+    Excluded,
+}
+
+fn resolve_markdown_link(
+    current_path: &str,
+    raw_target: &str,
     backend: &SourceBackend,
-    source_id: &str,
+    exact_paths: &HashSet<String>,
+    native_paths_lower: &HashMap<String, String>,
+) -> MarkdownLinkResolution {
+    let normalized_target = raw_target.replace('\\', "/");
+    if normalized_target.starts_with('/')
+        || normalized_target.starts_with("//")
+        || normalized_target
+            .as_bytes()
+            .get(1)
+            .is_some_and(|byte| *byte == b':')
+    {
+        return MarkdownLinkResolution::Excluded;
+    }
+    let parent = current_path
+        .rsplit_once('/')
+        .map_or("", |(parent, _)| parent);
+    let combined = if parent.is_empty() {
+        normalized_target
+    } else {
+        format!("{parent}/{normalized_target}")
+    };
+    let Ok(resolved) = normalize_virtual_path(&combined) else {
+        return MarkdownLinkResolution::Excluded;
+    };
+    if exact_paths.contains(&resolved) {
+        return MarkdownLinkResolution::Resolved(resolved);
+    }
+    if matches!(backend, SourceBackend::Native(_)) {
+        if let Some(actual) = native_paths_lower.get(&resolved.to_lowercase()) {
+            return MarkdownLinkResolution::Resolved(actual.clone());
+        }
+    }
+    MarkdownLinkResolution::Missing
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct AggregatedLinkKey {
+    target_path: Option<String>,
+    raw_target: Option<String>,
+    anchor: Option<String>,
+    kind: DocumentLinkKind,
+}
+
+fn build_link_index(
+    backend: &SourceBackend,
     show_hidden_files: bool,
     respect_gitignore: bool,
+    include_wiki_links: bool,
     roots: &AllowedRoots,
-) -> Result<CachedBacklinkIndex, String> {
+) -> Result<CachedLinkIndex, String> {
     // 解決候補は前方Wikiリンクと同じく隠し文書も含める。表示設定は参照元を
     // 一覧へ出すかだけに適用し、隠し文書の存在で解決先が変わる規則を維持する。
     let (mut candidate_paths, paths_truncated) = collect_source_markdown_paths_with_status(
@@ -1537,10 +1749,19 @@ fn build_backlink_index(
     };
     paths.sort_by_key(|path| path.to_lowercase());
     let files = super::wiki::WikiFileIndex::new(&candidate_paths);
-    let mut by_target: HashMap<String, Vec<BacklinkResult>> = HashMap::new();
+    let exact_paths = candidate_paths.iter().cloned().collect::<HashSet<_>>();
+    let native_paths_lower = candidate_paths
+        .iter()
+        .map(|path| (path.to_lowercase(), path.clone()))
+        .collect::<HashMap<_, _>>();
+    let mut edges = Vec::new();
+    let mut outgoing_by_source = HashMap::<String, Vec<usize>>::new();
+    let mut incoming_by_target = HashMap::<String, Vec<usize>>::new();
+    let mut broken_by_source = HashMap::<String, Vec<usize>>::new();
     let mut total_bytes = 0usize;
     let mut total_compressed_bytes = 0u64;
     let mut total_references = 0usize;
+    let mut total_string_bytes = 0usize;
     let mut inspections = 0usize;
     let mut truncated = paths_truncated;
     let mut zip_archive = match backend {
@@ -1580,49 +1801,100 @@ fn build_backlink_index(
             break;
         }
         let remaining = MAX_BACKLINK_REFERENCES.saturating_sub(total_references);
-        let (targets, targets_truncated) = extract_wiki_targets(&raw, remaining);
-        total_references = total_references.saturating_add(targets.len());
-        if targets_truncated {
+        let (links, links_truncated) = extract_document_links(&raw, include_wiki_links, remaining);
+        total_references = total_references.saturating_add(links.len());
+        if links_truncated {
             truncated = true;
         }
-        let mut counts = HashMap::<String, usize>::new();
-        for target in targets {
-            *counts.entry(target).or_default() += 1;
-        }
         let current_dir = super::wiki::parent_components_lower(&path);
-        let mut resolved_counts = HashMap::<String, usize>::new();
+        let mut counts = HashMap::<AggregatedLinkKey, usize>::new();
+        let mut document_string_bytes = 0usize;
         let mut stop_after_document = false;
-        for (target, reference_count) in counts {
-            let resolved = match files.resolve_target(
-                &target,
-                &current_dir,
-                &mut inspections,
-                MAX_BACKLINK_CANDIDATE_INSPECTIONS,
-            ) {
-                Ok(resolved) => resolved,
-                Err(_) => {
+        for link in links {
+            let target_path = match link.kind {
+                DocumentLinkKind::Wiki => match files.resolve_target(
+                    &link.raw_target,
+                    &current_dir,
+                    &mut inspections,
+                    MAX_BACKLINK_CANDIDATE_INSPECTIONS,
+                ) {
+                    Ok(resolved) => resolved,
+                    Err(_) => {
+                        truncated = true;
+                        stop_after_document = true;
+                        break;
+                    }
+                },
+                DocumentLinkKind::Markdown => match resolve_markdown_link(
+                    &path,
+                    &link.raw_target,
+                    backend,
+                    &exact_paths,
+                    &native_paths_lower,
+                ) {
+                    MarkdownLinkResolution::Resolved(resolved) => Some(resolved),
+                    MarkdownLinkResolution::Missing => None,
+                    MarkdownLinkResolution::Excluded => continue,
+                },
+            };
+            if target_path.as_deref() == Some(path.as_str()) {
+                continue;
+            }
+            let raw_target = target_path.is_none().then_some(link.raw_target);
+            let string_bytes = raw_target.as_ref().map_or(0, String::len)
+                + link.anchor.as_ref().map_or(0, String::len);
+            if document_string_bytes.saturating_add(string_bytes) > MAX_LINK_STRINGS_PER_DOCUMENT
+                || total_string_bytes.saturating_add(string_bytes) > MAX_LINK_INDEX_STRINGS
+            {
+                truncated = true;
+                stop_after_document = true;
+                break;
+            }
+            let key = AggregatedLinkKey {
+                target_path,
+                raw_target,
+                anchor: link.anchor,
+                kind: link.kind,
+            };
+            if !counts.contains_key(&key) {
+                if counts.len() >= MAX_LINK_EDGES_PER_DOCUMENT
+                    || edges.len().saturating_add(counts.len()) >= MAX_LINK_INDEX_EDGES
+                {
                     truncated = true;
                     stop_after_document = true;
                     break;
                 }
-            };
-            let Some(resolved) = resolved else {
-                continue;
-            };
-            if resolved == path {
-                continue;
+                document_string_bytes = document_string_bytes.saturating_add(string_bytes);
+                total_string_bytes = total_string_bytes.saturating_add(string_bytes);
             }
-            *resolved_counts.entry(resolved).or_default() += reference_count;
+            *counts.entry(key).or_default() += 1;
         }
-        for (resolved, reference_count) in resolved_counts {
-            by_target.entry(resolved).or_default().push(BacklinkResult {
-                document: DocumentRef {
-                    source_id: source_id.to_string(),
-                    path: path.clone(),
-                },
-                file_path: path.clone(),
+        for (key, reference_count) in counts {
+            let edge_id = edges.len();
+            let target_path = key.target_path.clone();
+            edges.push(IndexedLinkEdge {
+                source_path: path.clone(),
+                target_path: target_path.clone(),
+                raw_target: key.raw_target,
+                anchor: key.anchor,
+                kind: key.kind,
                 reference_count,
             });
+            outgoing_by_source
+                .entry(path.clone())
+                .or_default()
+                .push(edge_id);
+            if let Some(target_path) = target_path {
+                incoming_by_target
+                    .entry(target_path)
+                    .or_default()
+                    .push(edge_id);
+            } else {
+                broken_by_source
+                    .entry(path.clone())
+                    .or_default()
+                    .push(edge_id);
+            }
         }
         if stop_after_document {
             break 'documents;
@@ -1632,14 +1904,186 @@ fn build_backlink_index(
             break;
         }
     }
-    for results in by_target.values_mut() {
-        results.sort_by_key(|result| result.file_path.to_lowercase());
-    }
-    Ok(CachedBacklinkIndex {
+    Ok(CachedLinkIndex {
         created_at: Instant::now(),
-        by_target,
+        edges,
+        outgoing_by_source,
+        incoming_by_target,
+        broken_by_source,
         truncated,
     })
+}
+
+impl CachedLinkIndex {
+    fn edge_for_response(&self, edge_id: usize, source_id: &str) -> DocumentLinkEdge {
+        let edge = &self.edges[edge_id];
+        DocumentLinkEdge {
+            source: DocumentRef {
+                source_id: source_id.to_string(),
+                path: edge.source_path.clone(),
+            },
+            target: edge.target_path.as_ref().map(|path| DocumentRef {
+                source_id: source_id.to_string(),
+                path: path.clone(),
+            }),
+            raw_target: edge.raw_target.clone(),
+            anchor: edge.anchor.clone(),
+            kind: edge.kind,
+            reference_count: edge.reference_count,
+        }
+    }
+
+    fn response_edge_bytes(&self, edge_id: usize, source_id: &str) -> usize {
+        let edge = &self.edges[edge_id];
+        let source_id_bytes = source_id.len() * (1 + usize::from(edge.target_path.is_some()));
+        let string_bytes = source_id_bytes
+            + edge.source_path.len()
+            + edge.target_path.as_ref().map_or(0, String::len)
+            + edge.raw_target.as_ref().map_or(0, String::len)
+            + edge.anchor.as_ref().map_or(0, String::len);
+        // JSON escaping can expand a character to a six-byte \uXXXX sequence.
+        string_bytes.saturating_mul(6).saturating_add(256)
+    }
+
+    fn section(
+        &self,
+        edge_ids: &[usize],
+        source_id: &str,
+        remaining_bytes: &mut usize,
+    ) -> (LinkContextSection, bool) {
+        let mut sorted_ids = edge_ids.to_vec();
+        sorted_ids.sort_by(|left, right| {
+            let left = &self.edges[*left];
+            let right = &self.edges[*right];
+            left.target_path
+                .as_deref()
+                .or(left.raw_target.as_deref())
+                .unwrap_or_default()
+                .cmp(
+                    right
+                        .target_path
+                        .as_deref()
+                        .or(right.raw_target.as_deref())
+                        .unwrap_or_default(),
+                )
+        });
+        let total = (!self.truncated).then_some(sorted_ids.len());
+        let mut items = Vec::with_capacity(sorted_ids.len().min(MAX_LINK_CONTEXT_ITEMS));
+        for edge_id in sorted_ids.into_iter().take(MAX_LINK_CONTEXT_ITEMS) {
+            let edge_bytes = self.response_edge_bytes(edge_id, source_id);
+            if edge_bytes > *remaining_bytes {
+                break;
+            }
+            *remaining_bytes -= edge_bytes;
+            items.push(self.edge_for_response(edge_id, source_id));
+        }
+        let omitted = items.len() < edge_ids.len();
+        (LinkContextSection { items, total }, omitted)
+    }
+}
+
+struct LinkIndexLoadOptions {
+    show_hidden_files: bool,
+    respect_gitignore: bool,
+    include_wiki_links: bool,
+    force_refresh: bool,
+}
+
+fn get_or_build_link_index(
+    document: &DocumentRef,
+    options: LinkIndexLoadOptions,
+    roots: &AllowedRoots,
+    registry: &SourceRegistry,
+    indexes: &LinkIndexState,
+) -> Result<(String, CachedLinkIndex), String> {
+    let path = normalize_virtual_path(&document.path)?;
+    if !is_markdown_virtual_path(&path) {
+        return Err("Markdown文書を指定してください".to_string());
+    }
+    let (backend, generation) = registry.get_with_generation(&document.source_id)?;
+    let respect_gitignore = options.respect_gitignore && backend.capabilities().respect_gitignore;
+    let key = LinkCacheKey {
+        source_id: document.source_id.clone(),
+        generation,
+        show_hidden_files: options.show_hidden_files,
+        respect_gitignore,
+        include_wiki_links: options.include_wiki_links,
+    };
+    let index = match indexes.cached_or_reserve(&key, options.force_refresh)? {
+        Some(index) => index,
+        None => indexes.finish(
+            key,
+            build_link_index(
+                &backend,
+                options.show_hidden_files,
+                respect_gitignore,
+                options.include_wiki_links,
+                roots,
+            ),
+        )?,
+    };
+    Ok((path, index))
+}
+
+#[tauri::command]
+#[allow(clippy::too_many_arguments)] // Tauri injects three managed states beside request fields.
+pub async fn get_source_link_context(
+    document: DocumentRef,
+    show_hidden_files: bool,
+    respect_gitignore: bool,
+    include_wiki_links: bool,
+    force_refresh: bool,
+    roots: State<'_, AllowedRoots>,
+    registry: State<'_, SourceRegistry>,
+    indexes: State<'_, LinkIndexState>,
+) -> Result<LinkContextResponse, String> {
+    let roots = roots.inner().clone();
+    let registry = registry.inner().clone();
+    let indexes = indexes.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let (path, index) = get_or_build_link_index(
+            &document,
+            LinkIndexLoadOptions {
+                show_hidden_files,
+                respect_gitignore,
+                include_wiki_links,
+                force_refresh,
+            },
+            &roots,
+            &registry,
+            &indexes,
+        )?;
+        let outgoing_ids = index
+            .outgoing_by_source
+            .get(&path)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let incoming_ids = index
+            .incoming_by_target
+            .get(&path)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let broken_ids = index
+            .broken_by_source
+            .get(&path)
+            .map(Vec::as_slice)
+            .unwrap_or_default();
+        let mut remaining_bytes = MAX_LINK_CONTEXT_BYTES;
+        let (outgoing, outgoing_omitted) =
+            index.section(outgoing_ids, &document.source_id, &mut remaining_bytes);
+        let (incoming, incoming_omitted) =
+            index.section(incoming_ids, &document.source_id, &mut remaining_bytes);
+        let (broken, broken_omitted) =
+            index.section(broken_ids, &document.source_id, &mut remaining_bytes);
+        Ok(LinkContextResponse {
+            outgoing,
+            incoming,
+            broken,
+            truncated: index.truncated || outgoing_omitted || incoming_omitted || broken_omitted,
+        })
+    })
+    .await
+    .map_err(|error| format!("リンク情報の取得に失敗しました: {error}"))?
 }
 
 #[tauri::command]
@@ -1650,40 +2094,50 @@ pub async fn list_source_backlinks(
     force_refresh: bool,
     roots: State<'_, AllowedRoots>,
     registry: State<'_, SourceRegistry>,
-    indexes: State<'_, BacklinkIndexState>,
+    indexes: State<'_, LinkIndexState>,
 ) -> Result<BacklinkResponse, String> {
     let roots = roots.inner().clone();
     let registry = registry.inner().clone();
     let indexes = indexes.inner().clone();
     tauri::async_runtime::spawn_blocking(move || {
-        let path = normalize_virtual_path(&document.path)?;
-        if !is_markdown_virtual_path(&path) {
-            return Err("Markdown文書を指定してください".to_string());
-        }
-        let (backend, generation) = registry.get_with_generation(&document.source_id)?;
-        let respect_gitignore = respect_gitignore && backend.capabilities().respect_gitignore;
-        let key = BacklinkCacheKey {
-            source_id: document.source_id.clone(),
-            generation,
-            show_hidden_files,
-            respect_gitignore,
-        };
-        let index = match indexes.cached_or_reserve(&key, force_refresh)? {
-            Some(index) => index,
-            None => indexes.finish(
-                key,
-                build_backlink_index(
-                    &backend,
-                    &document.source_id,
-                    show_hidden_files,
-                    respect_gitignore,
-                    &roots,
-                ),
-            )?,
-        };
+        let (path, index) = get_or_build_link_index(
+            &document,
+            LinkIndexLoadOptions {
+                show_hidden_files,
+                respect_gitignore,
+                include_wiki_links: true,
+                force_refresh,
+            },
+            &roots,
+            &registry,
+            &indexes,
+        )?;
+        let wiki_edges = index
+            .incoming_by_target
+            .get(&path)
+            .into_iter()
+            .flatten()
+            .filter(|edge_id| index.edges[**edge_id].kind == DocumentLinkKind::Wiki)
+            .copied()
+            .collect::<Vec<_>>();
+        let results = wiki_edges
+            .iter()
+            .take(MAX_LINK_CONTEXT_ITEMS)
+            .map(|edge_id| {
+                let edge = &index.edges[*edge_id];
+                BacklinkResult {
+                    document: DocumentRef {
+                        source_id: document.source_id.clone(),
+                        path: edge.source_path.clone(),
+                    },
+                    file_path: edge.source_path.clone(),
+                    reference_count: edge.reference_count,
+                }
+            })
+            .collect();
         Ok(BacklinkResponse {
-            results: index.by_target.get(&path).cloned().unwrap_or_default(),
-            truncated: index.truncated,
+            results,
+            truncated: index.truncated || wiki_edges.len() > MAX_LINK_CONTEXT_ITEMS,
         })
     })
     .await
@@ -1956,13 +2410,85 @@ mod tests {
     }
 
     #[test]
+    fn markdown_link_extraction_includes_document_links_and_excludes_unsafe_targets() {
+        let raw = r#"
+[target]: guide/reference.markdown#Details
+
+[inline](guide/target.md#Section)
+[reference][target]
+![image](guide/image.md)
+[external](https://example.com/page.md)
+[file](file:///C:/secret.md)
+[ftp](ftp://example.com/page.md)
+[script](javascript:payload.md)
+[query](guide/query.md?mode=raw)
+[other](guide/file.txt)
+[local](#heading)
+`[code](guide/code.md)`
+<a href="guide/html.md">HTML</a>
+"#;
+        let (links, truncated) = extract_markdown_links(raw, 20);
+        assert!(!truncated);
+        assert_eq!(links.len(), 2);
+        assert_eq!(links[0].raw_target, "guide/target.md");
+        assert_eq!(links[0].anchor.as_deref(), Some("Section"));
+        assert_eq!(links[1].raw_target, "guide/reference.markdown");
+        assert_eq!(links[1].anchor.as_deref(), Some("Details"));
+        assert!(links
+            .iter()
+            .all(|link| link.kind == DocumentLinkKind::Markdown));
+    }
+
+    #[test]
+    fn markdown_link_resolution_distinguishes_missing_from_source_escape() {
+        let directory = tempfile::tempdir().unwrap();
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let backend = SourceBackend::Native(NativeSource {
+            root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
+        });
+        let paths = HashSet::from(["guide/current.md".to_string(), "target.md".to_string()]);
+        let lower = HashMap::from([("target.md".to_string(), "target.md".to_string())]);
+
+        assert!(matches!(
+            resolve_markdown_link("guide/current.md", "../target.md", &backend, &paths, &lower),
+            MarkdownLinkResolution::Resolved(path) if path == "target.md"
+        ));
+        assert!(matches!(
+            resolve_markdown_link("guide/current.md", "missing.md", &backend, &paths, &lower),
+            MarkdownLinkResolution::Missing
+        ));
+        assert!(matches!(
+            resolve_markdown_link(
+                "guide/current.md",
+                "../../outside.md",
+                &backend,
+                &paths,
+                &lower
+            ),
+            MarkdownLinkResolution::Excluded
+        ));
+        assert!(matches!(
+            resolve_markdown_link(
+                "guide/current.md",
+                "C:/outside.md",
+                &backend,
+                &paths,
+                &lower
+            ),
+            MarkdownLinkResolution::Excluded
+        ));
+    }
+
+    #[test]
     fn backlink_cache_rejects_duplicate_builds_and_recovers_after_failure() {
-        let state = BacklinkIndexState::new();
-        let key = BacklinkCacheKey {
+        let state = LinkIndexState::new();
+        let key = LinkCacheKey {
             source_id: "source".to_string(),
             generation: 1,
             show_hidden_files: false,
             respect_gitignore: true,
+            include_wiki_links: true,
         };
         assert!(state.cached_or_reserve(&key, false).unwrap().is_none());
         assert!(state.cached_or_reserve(&key, false).is_err());
@@ -1974,14 +2500,95 @@ mod tests {
             .is_err());
         assert!(state.cached_or_reserve(&key, false).unwrap().is_none());
 
-        let index = CachedBacklinkIndex {
+        let index = CachedLinkIndex {
             created_at: Instant::now(),
-            by_target: HashMap::new(),
+            edges: Vec::new(),
+            outgoing_by_source: HashMap::new(),
+            incoming_by_target: HashMap::new(),
+            broken_by_source: HashMap::new(),
             truncated: false,
         };
         state.finish(key.clone(), Ok(index)).unwrap();
         assert!(state.cached_or_reserve(&key, false).unwrap().is_some());
         assert!(state.cached_or_reserve(&key, true).unwrap().is_none());
+        state
+            .finish(
+                key.clone(),
+                Ok(CachedLinkIndex {
+                    created_at: Instant::now(),
+                    edges: Vec::new(),
+                    outgoing_by_source: HashMap::new(),
+                    incoming_by_target: HashMap::new(),
+                    broken_by_source: HashMap::new(),
+                    truncated: false,
+                }),
+            )
+            .unwrap();
+        let mut markdown_only_key = key;
+        markdown_only_key.include_wiki_links = false;
+        assert!(state
+            .cached_or_reserve(&markdown_only_key, false)
+            .unwrap()
+            .is_none());
+    }
+
+    #[test]
+    fn link_cache_expires_stale_indexes() {
+        let key = LinkCacheKey {
+            source_id: "source".to_string(),
+            generation: 2,
+            show_hidden_files: true,
+            respect_gitignore: false,
+            include_wiki_links: false,
+        };
+        let stale = CachedLinkIndex {
+            created_at: Instant::now() - BACKLINK_INDEX_TTL - Duration::from_secs(1),
+            edges: Vec::new(),
+            outgoing_by_source: HashMap::new(),
+            incoming_by_target: HashMap::new(),
+            broken_by_source: HashMap::new(),
+            truncated: false,
+        };
+        let state = LinkIndexState(Arc::new(Mutex::new(LinkIndexInner {
+            indexes: HashMap::from([(key.clone(), stale)]),
+            in_flight: HashSet::new(),
+        })));
+
+        assert!(state.cached_or_reserve(&key, false).unwrap().is_none());
+    }
+
+    #[test]
+    fn link_context_sections_share_item_and_byte_limits() {
+        let long_path = format!("{}.md", "a".repeat(1_000));
+        let edges = (0..600)
+            .map(|index| IndexedLinkEdge {
+                source_path: format!("{index:04}-{long_path}"),
+                target_path: Some(format!("target-{index:04}-{long_path}")),
+                raw_target: None,
+                anchor: Some("heading".repeat(20)),
+                kind: DocumentLinkKind::Markdown,
+                reference_count: 1,
+            })
+            .collect::<Vec<_>>();
+        let index = CachedLinkIndex {
+            created_at: Instant::now(),
+            edges,
+            outgoing_by_source: HashMap::new(),
+            incoming_by_target: HashMap::new(),
+            broken_by_source: HashMap::new(),
+            truncated: false,
+        };
+        let ids = (0..600).collect::<Vec<_>>();
+        let mut remaining = MAX_LINK_CONTEXT_BYTES;
+        let (outgoing, outgoing_omitted) = index.section(&ids, "source", &mut remaining);
+        let (incoming, incoming_omitted) = index.section(&ids, "source", &mut remaining);
+
+        assert!(outgoing.items.len() <= MAX_LINK_CONTEXT_ITEMS);
+        assert!(outgoing_omitted);
+        assert!(incoming_omitted);
+        assert_eq!(outgoing.total, Some(600));
+        assert_eq!(incoming.total, Some(600));
+        assert!(remaining < MAX_LINK_CONTEXT_BYTES);
     }
 
     #[test]
@@ -2009,27 +2616,63 @@ mod tests {
             root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
         });
 
-        let index = build_backlink_index(&backend, "native", false, false, &roots).unwrap();
+        let index = build_link_index(&backend, false, false, true, &roots).unwrap();
+        let root_edges = &index.incoming_by_target["target.md"];
+        assert_eq!(root_edges.len(), 2);
+        assert_eq!(index.edges[root_edges[0]].source_path, "ref.md");
         assert_eq!(
-            index.by_target.get("target.md"),
-            Some(&vec![BacklinkResult {
-                document: DocumentRef {
-                    source_id: "native".to_string(),
-                    path: "ref.md".to_string(),
-                },
-                file_path: "ref.md".to_string(),
-                reference_count: 3,
-            }])
+            index.edges[root_edges[0]].reference_count + index.edges[root_edges[1]].reference_count,
+            3
         );
-        assert_eq!(
-            index.by_target["sub/target.md"][0].document.path,
-            "sub/ref.md"
-        );
-        assert_eq!(
-            index.by_target[".hidden/target.md"][0].document.path,
-            "hidden-ref.md"
-        );
+        let nested_edge = index.incoming_by_target["sub/target.md"][0];
+        assert_eq!(index.edges[nested_edge].source_path, "sub/ref.md");
+        let hidden_edge = index.incoming_by_target[".hidden/target.md"][0];
+        assert_eq!(index.edges[hidden_edge].source_path, "hidden-ref.md");
         assert!(!index.truncated);
+    }
+
+    #[test]
+    fn native_link_index_combines_markdown_wiki_and_broken_links() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::create_dir(directory.path().join("guide")).unwrap();
+        std::fs::write(directory.path().join("target.md"), "# Target").unwrap();
+        std::fs::write(
+            directory.path().join("guide/current.md"),
+            "[Target](../target.md#Intro) [again](../target.md#Intro) [[target]] [missing](missing.md) [self](current.md) [outside](../../outside.md)",
+        )
+        .unwrap();
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let backend = SourceBackend::Native(NativeSource {
+            root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
+        });
+
+        let index = build_link_index(&backend, true, false, true, &roots).unwrap();
+        let outgoing = &index.outgoing_by_source["guide/current.md"];
+        assert_eq!(outgoing.len(), 3);
+        let markdown = outgoing
+            .iter()
+            .map(|id| &index.edges[*id])
+            .find(|edge| {
+                edge.kind == DocumentLinkKind::Markdown
+                    && edge.target_path.as_deref() == Some("target.md")
+            })
+            .unwrap();
+        assert_eq!(markdown.anchor.as_deref(), Some("Intro"));
+        assert_eq!(markdown.reference_count, 2);
+        let broken = &index.edges[index.broken_by_source["guide/current.md"][0]];
+        assert_eq!(broken.raw_target.as_deref(), Some("missing.md"));
+        assert!(index
+            .edges
+            .iter()
+            .all(|edge| edge.raw_target.as_deref() != Some("../../outside.md")));
+
+        let without_wiki = build_link_index(&backend, true, false, false, &roots).unwrap();
+        assert!(without_wiki
+            .edges
+            .iter()
+            .all(|edge| edge.kind == DocumentLinkKind::Markdown));
+        assert_eq!(without_wiki.outgoing_by_source["guide/current.md"].len(), 2);
     }
 
     #[test]
@@ -2067,13 +2710,46 @@ mod tests {
             .unwrap(),
         );
 
-        let index = build_backlink_index(&backend, "zip", true, false, &roots).unwrap();
-        assert_eq!(index.by_target["target.md"][0].document.source_id, "zip");
-        assert_eq!(
-            index.by_target["target.md"][0].document.path,
-            "guide/ref.md"
-        );
+        let index = build_link_index(&backend, true, false, true, &roots).unwrap();
+        let edge = index.incoming_by_target["target.md"][0];
+        assert_eq!(index.edges[edge].source_path, "guide/ref.md");
         assert!(!index.truncated);
+    }
+
+    #[test]
+    fn zip_link_index_resolves_markdown_paths_and_keeps_missing_targets() {
+        let directory = tempfile::tempdir().unwrap();
+        let archive_path = directory.path().join("links.zip");
+        create_zip(
+            &archive_path,
+            &[
+                ("target.md", b"# Target"),
+                (
+                    "guide/current.md",
+                    b"[target](../target.md#Intro) [missing](missing.md)",
+                ),
+            ],
+        );
+        let roots = AllowedRoots::new();
+        roots
+            .register_zip_file(&archive_path.to_string_lossy())
+            .unwrap();
+        let backend = SourceBackend::Zip(
+            build_zip_source(
+                roots.resolve(&archive_path.to_string_lossy()).unwrap(),
+                &roots,
+            )
+            .unwrap(),
+        );
+
+        let index = build_link_index(&backend, true, false, false, &roots).unwrap();
+        let resolved = &index.edges[index.incoming_by_target["target.md"][0]];
+        assert_eq!(resolved.source_path, "guide/current.md");
+        assert_eq!(resolved.anchor.as_deref(), Some("Intro"));
+        assert!(resolved.raw_target.is_none());
+        let broken = &index.edges[index.broken_by_source["guide/current.md"][0]];
+        assert!(broken.target_path.is_none());
+        assert_eq!(broken.raw_target.as_deref(), Some("missing.md"));
     }
 
     #[test]
