@@ -205,10 +205,13 @@ export const en: typeof ja = {
     refresh: "Refresh links",
     graph: "Show local link graph",
     graphTitle: "Local link graph",
+    graphOpenFailed: (error: unknown) => `Could not open the link graph: ${String(error)}`,
     incomingColumn: "Incoming",
     currentColumn: "Current document",
     outgoingColumn: "Outgoing and broken links",
     graphDocuments: "Related documents",
+    graphKeyboardHelp:
+      "Use the arrow keys to move between nodes, then press Enter to open a document.",
     legend: "Legend",
     graphOmitted: (count: number) => `${count} nodes omitted`,
     graphOmittedUnknown: "Additional nodes omitted (count unknown)",

@@ -9,6 +9,7 @@ pub mod sources;
 pub mod update;
 pub mod watcher;
 pub mod wiki;
+pub mod window;
 
 use std::path::Path;
 

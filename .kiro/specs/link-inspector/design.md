@@ -20,12 +20,16 @@ NativeSource / ZipSource
 出力     入力     リンク切れ
    \      |       /
  get_source_link_context
-          |
- LinkInspectorPanel / LinkGraphDialog
+      /           \
+LinkInspectorPanel  Rust LinkGraphWindowState
+                              |
+                    LinkGraphWindow / Cytoscape.js
 ```
 
-リンクインスペクターとグラフは同じ`LinkContextResponse`を使用する。グラフ表示のための
-再走査は行わない。
+リンクインスペクターとグラフは同じ`LinkContextResponse`を使用する。リンクグラフは独立した
+WebViewウインドウで表示するため、メインウインドウが現在文書と表示条件をRust側の
+`LinkGraphWindowState`へ同期し、グラフウインドウは保存済みコンテキストを使って同じ索引を
+取得する。グラフ表示のための別索引や本文再走査は行わない。
 
 ## 2. Rustデータモデル
 
@@ -86,6 +90,20 @@ get_source_link_context(
     force_refresh: bool,
 ) -> LinkContextResponse
 ```
+
+独立ウインドウとの同期には以下の用途限定コマンドを使用する。
+
+- メイン専用: `begin_link_graph_window_context_session`、
+  `update_link_graph_window_context`、`open_link_graph_window`、
+  `close_link_graph_window`
+- リンクグラフ専用: `get_link_graph_window_context`、
+  `get_link_graph_data`、`request_link_graph_document_open`
+
+メインWebViewの再読み込みごとにUUIDのセッションを開始し、各更新へ単調なsequenceを付ける。
+Rust側が単調な`contextVersion`を発番し、旧セッション、逆順sequence、古い応答を拒否する。
+`get_link_graph_data`が返した解決済み入力・出力DocumentRefだけを、そのversionで開ける集合として
+Rust側へ保持する。ノード遷移要求はversion、現在文書、Source、許可集合を照合してから
+メインウインドウへ通知する。
 
 移行中は`list_source_backlinks`を同じ`LinkIndex`へ委譲する互換アダプターとして残す。
 フロント移行と既存テスト更新後、呼び出しがなければ同じ変更系列内で削除する。
@@ -166,26 +184,36 @@ Wikiプラグイン有効状態を要求scopeとコマンド引数へ含める�
 
 ## 6. ローカルリンクグラフ
 
-`LinkGraphDialog.svelte`を新設し、サイドバーのグラフボタンから開く。既存Lightboxは画像・SVGの
-拡大表示責務に限定されているため拡張しない。
+`LinkGraphView.svelte`でCytoscape.jsのCanvasグラフを描画し、`LinkGraphWindow.svelte`を
+静的ルート`/link-graph`へ表示する。既存Lightboxは画像・SVGの拡大表示責務に限定し、
+リンクインスペクター内へ関連文書一覧を重複表示しない。
 
-SVG内の配置は決定的な3列レイアウトとする。
+Rustの`open_link_graph_window`はラベル`link-graph`のWebViewウインドウを1つだけ生成する。
+既に存在する場合は新規作成せず、表示、最小化解除、フォーカスを行う。ウインドウは初期
+900×650px、最小520×360pxでリサイズ可能とし、メインウインドウのアプリメニューを継承
+しないよう生成時と再表示時にメニューを削除する。メインウインドウ終了時はサブウインドウも
+閉じる。
 
-- 左列: 入力のみ
-- 中央: 現在文書
-- 右列: 出力のみとリンク切れ
-- 入出力両方: 中央寄りの共有列に1ノード
+グラフウインドウは250ms間隔のsingle-in-flightポーリングでRust側コンテキストを確認する。
+`contextVersion`が進んだ場合だけ索引結果を読み込み、要求IDとversionの両方で古い応答を破棄する。
+メイン側の文書、テーマ、言語、隠しファイル、gitignore、Wikiリンク設定の変更へ追従する。
+明示更新では現在versionの索引を`forceRefresh`付きで再取得する。
 
-表示ノードはファイルパスの大文字小文字無視昇順で安定化し、最大40件までとする。
+Cytoscape.jsは物理シミュレーションを使わない`concentric`レイアウトとする。現在文書を中心、
+入力・出力・両方向・リンク切れノードを外周へ配置する。ノードラベルはボックス内へ描画し、
+リンク切れは警告記号、赤系色、破線枠で示す。エッジはWikiリンクを破線、Markdownリンクを
+実線として方向を表示する。
+
+表示ノードはファイルパスの大文字小文字無視昇順で安定化し、現在文書を含め最大40件までとする。
 全区分の`total`が`Some`で、かつ`total == items.len()`、すなわち全Edgeが応答内にある場合だけ、
 DocumentRef単位の統合後ノード総数をフロントで正確に計算し、40件との差を省略ノード数として
 表示する。いずれかの区分が索引打切り、500件上限、1MiB上限で完全でない場合は、Edge総数から
-ノード数を推測せず「追加ノードあり（件数不明）」と表示する。破線枠はリンク切れ、エッジの線種またはラベルで
-Wiki／Markdownを区別する。
+ノード数を推測せず「追加ノードあり（件数不明）」と表示する。
 
-SVGだけに操作を閉じず、同じノードをDOMのボタン一覧として提供する。ダイアログは
-`role="dialog"`、`aria-modal="true"`、初期フォーカス、フォーカストラップ、`Escape`、
-フォーカス復帰を実装する。
+Canvasを`role="application"`のカスタムキーボードウィジェットとして扱い、矢印キー、
+`Home`、`End`でノードを移動し、`Enter`またはSpaceで解決済み文書を開く。選択中ノードは
+ARIA live領域へ通知する。ノード選択後もグラフウインドウは閉じず、メイン側の文書切替に
+追従して再描画する。
 
 ## 7. 安全性
 
@@ -194,8 +222,17 @@ SVGだけに操作を閉じず、同じノードをDOMのボタン一覧とし�
 - ZipSourceは検証済み中央ディレクトリと圧縮・展開上限を使用する
 - 信頼ルート外リンクやSource外リンクを索引結果へ含めない
 - 生のMarkdown、HTML、絶対ネイティブパスをグラフへ渡さない
-- ノードラベルはSvelteのテキスト補間で描画し、`{@html}`を使用しない
-- 上限到達時はfail-openで走査を継続せず、部分結果と`truncated`を返す
+- ノードラベルはCytoscapeの`data`からCanvasテキストとして描画し、HTMLや`{@html}`へ
+  挿入しない
+- `AppManifest::commands`でアプリ内TauriコマンドをACL管理し、メインとリンクグラフの
+  capabilityを分離する
+- リンクグラフには用途限定の3コマンドだけを許可し、汎用イベント、ファイル読込、履歴、
+  外部エディター等の権限を与えない
+- 各専用コマンドはRustが注入する`WebviewWindow`のラベルを検証し、フロントから呼出元を
+  偽装できないようにする
+- グラフからの文書遷移は、Rustが直前に返した解決済みノード集合との完全一致を確認し、
+  メイン側でもversion、現在文書、Sourceを再検証する
+- 上限到達時は安全側に走査を打ち切り、部分結果と`truncated`を返す
 - Edge本体を索引内で一重化し、IPC応答とDOM表示にも独立した件数・バイト上限を適用する
 
 ## 8. 検証
@@ -208,5 +245,9 @@ SVGだけに操作を閉じず、同じノードをDOMのボタン一覧とし�
 - Wikiプラグイン無効時にMarkdownだけを返し、有効化後に別キャッシュでWikiを含めるテスト
 - LinkInspectorStoreのlatest-only・dirty・エラー処理テスト
 - パネルの空・失敗・省略・リンク切れ・キーボード操作テスト
-- グラフの配置、40件上限、ノード統合、リンク切れ、フォーカストラップのテスト
-- WebView2で一覧遷移、モーダル、`Escape`、ノード遷移を確認する
+- グラフモデルの40件上限、ノード統合、リンク切れと、Canvasのキーボード操作をテストする
+- シングルトン生成、文書追従、逆順更新、WebView再読み込み、古いノード遷移拒否、
+  メイン終了時のサブウインドウ破棄をテストする
+- capability分離と、リンクグラフから未許可コマンド・汎用イベントを利用できないことを確認する
+- WebView2でNative/ZIPの一覧遷移、同心円配置、独立ウインドウ、リサイズ、メニュー非表示、
+  文書追従、ノード遷移を確認する

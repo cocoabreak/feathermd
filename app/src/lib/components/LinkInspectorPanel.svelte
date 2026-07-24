@@ -8,8 +8,8 @@
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { tabStore } from "$lib/stores/tab.svelte";
   import { i18n } from "$lib/i18n/index.svelte";
+  import { openLinkGraphWindow } from "$lib/link-graph-window";
   import { basename } from "$lib/utils";
-  import LinkGraphDialog from "./LinkGraphDialog.svelte";
 
   type SectionName = "outgoing" | "incoming" | "broken";
 
@@ -18,7 +18,7 @@
   const canLoad = $derived(!!activeTab?.document && !!activeTab.source);
   const wikiLinksEnabled = $derived(settingsStore.settings.renderers["wiki-links"] === true);
   let activeSection = $state<SectionName>("outgoing");
-  let graphOpen = $state(false);
+  let graphWindowError = $state<string | null>(null);
   const section = $derived.by<LinkContextSection>(() => linkInspectorStore[activeSection]);
 
   $effect(() => {
@@ -74,7 +74,12 @@
         disabled={!canLoad || linkInspectorStore.isLoading}
         title={m.links.graph}
         aria-label={m.links.graph}
-        onclick={() => (graphOpen = true)}
+        onclick={() => {
+          graphWindowError = null;
+          void openLinkGraphWindow().catch((error) => {
+            graphWindowError = String(error);
+          });
+        }}
       >
         <Network size={14} />
       </button>
@@ -90,6 +95,12 @@
       </button>
     </div>
   </div>
+
+  {#if graphWindowError}
+    <p class="shrink-0 border-b px-2 py-1 text-[11px] text-destructive" role="alert">
+      {m.links.graphOpenFailed(graphWindowError)}
+    </p>
+  {/if}
 
   <div class="grid h-8 shrink-0 grid-cols-3 border-b text-xs" role="tablist">
     {#each ["outgoing", "incoming", "broken"] as const as name}
@@ -178,20 +189,3 @@
     {/if}
   </div>
 </div>
-
-{#if graphOpen && activeTab?.document && activeTab.source}
-  <LinkGraphDialog
-    current={activeTab.document}
-    source={activeTab.source}
-    outgoing={linkInspectorStore.outgoing}
-    incoming={linkInspectorStore.incoming}
-    broken={linkInspectorStore.broken}
-    onopen={(node) => {
-      const target = node.document;
-      if (!target || !activeTab?.source || !activeTab.document) return;
-      void linkInspectorStore.openDocument(target, activeTab.source);
-      graphOpen = false;
-    }}
-    onclose={() => (graphOpen = false)}
-  />
-{/if}

@@ -79,6 +79,7 @@ pub fn run() {
         .manage(SearchState::new())
         .manage(SourceRegistry::new())
         .manage(LinkIndexState::new())
+        .manage(commands::window::LinkGraphWindowState::default())
         .manage(UpdateCheckerState::default())
         .manage(WikiIndexState::new())
         .manage(AllowedRoots::new())
@@ -91,6 +92,13 @@ pub fn run() {
             commands::export::save_binary_export,
             commands::app_state::load_app_state,
             commands::app_state::save_app_state,
+            commands::window::begin_link_graph_window_context_session,
+            commands::window::close_link_graph_window,
+            commands::window::get_link_graph_data,
+            commands::window::get_link_graph_window_context,
+            commands::window::open_link_graph_window,
+            commands::window::request_link_graph_document_open,
+            commands::window::update_link_graph_window_context,
             commands::file::readers::read_custom_css,
             commands::file::readers::read_directory,
             commands::file::dialogs::authorize_path,

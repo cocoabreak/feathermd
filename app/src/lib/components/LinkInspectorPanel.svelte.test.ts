@@ -1,4 +1,4 @@
-import { fireEvent, render, waitFor } from "@testing-library/svelte";
+import { fireEvent, render } from "@testing-library/svelte";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { openSourceMarkdown } from "$lib/actions/file-actions";
 import LinkInspectorPanel from "$lib/components/LinkInspectorPanel.svelte";
@@ -121,10 +121,12 @@ describe("LinkInspectorPanel", () => {
     expect(view.getByTitle("missing.md")).toHaveAttribute("tabindex", "0");
 
     await fireEvent.click(view.getByRole("button", { name: "Show local link graph" }));
-    expect(view.getByRole("dialog", { name: "Local link graph" })).toBeInTheDocument();
-    await fireEvent.keyDown(view.getByRole("dialog"), { key: "Escape" });
-    await waitFor(() =>
-      expect(view.queryByRole("dialog", { name: "Local link graph" })).not.toBeInTheDocument()
+    expect(invokeMock).toHaveBeenCalledWith("open_link_graph_window");
+
+    invokeMock.mockRejectedValueOnce("window error");
+    await fireEvent.click(view.getByRole("button", { name: "Show local link graph" }));
+    expect(await view.findByRole("alert")).toHaveTextContent(
+      "Could not open the link graph: window error"
     );
   });
 });

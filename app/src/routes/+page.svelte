@@ -52,6 +52,14 @@
   import { linkInspectorStore } from "$lib/stores/links.svelte";
   import { searchStore } from "$lib/stores/search.svelte";
   import { sessionUiStateStore } from "$lib/stores/session-ui-state.svelte";
+  import {
+    LINK_GRAPH_OPEN_DOCUMENT_EVENT,
+    handleLinkGraphOpenRequest,
+    type LinkGraphDocumentOpenRequest,
+    type LinkGraphWindowContext,
+    type LinkGraphWindowContextUpdate,
+    type LinkGraphWindowSnapshot,
+  } from "$lib/link-graph-window";
 
   // タブ復元完了前に空状態でtabs.jsonを上書きしないためのガード
   let hydrated = $state(false);
@@ -59,6 +67,15 @@
   let unlistenCliArgs: UnlistenFn | undefined;
   let stopCustomCss: (() => void) | undefined;
   let unlistenCloseRequested: UnlistenFn | undefined;
+  let unlistenLinkGraphOpenDocument: UnlistenFn | undefined;
+  let linkGraphThemeObserver: MutationObserver | undefined;
+  let linkGraphSessionReady = $state(false);
+  let linkGraphSessionId = "";
+  let linkGraphSequence = 0;
+  let latestLinkGraphSnapshot: LinkGraphWindowSnapshot = {
+    contextVersion: 0,
+    context: null,
+  };
   let closing = false;
   let reloading = false;
   let destroyed = false;
@@ -70,6 +87,41 @@
 
   function syncTocLayout(event: MediaQueryList | MediaQueryListEvent) {
     compactToc = event.matches;
+  }
+
+  function currentLinkGraphContext(): LinkGraphWindowContext | null {
+    const active = tabStore.tabs.find((tab) => tab.id === tabStore.activeTabId);
+    if (!active?.document || !active.source) return null;
+    return {
+      document: active.document,
+      revision: linkInspectorStore.revision,
+      showHiddenFiles: settingsStore.settings.showHiddenFiles,
+      respectGitignore: settingsStore.settings.respectGitignore,
+      includeWikiLinks: settingsStore.settings.renderers["wiki-links"] === true,
+      locale: i18n.locale,
+      dark: document.documentElement.classList.contains("dark"),
+    };
+  }
+
+  function publishLinkGraphContext(): void {
+    if (!linkGraphSessionReady) return;
+    const update: LinkGraphWindowContextUpdate = {
+      sessionId: linkGraphSessionId,
+      sequence: ++linkGraphSequence,
+      context: currentLinkGraphContext(),
+    };
+    void invoke<LinkGraphWindowSnapshot>("update_link_graph_window_context", { update })
+      .then((snapshot) => {
+        if (
+          update.sessionId === linkGraphSessionId &&
+          snapshot.contextVersion > latestLinkGraphSnapshot.contextVersion
+        ) {
+          latestLinkGraphSnapshot = snapshot;
+        }
+      })
+      .catch((error) => {
+        console.error("リンクグラフの表示対象を更新できませんでした:", error);
+      });
   }
 
   async function reloadAfterSaving(): Promise<void> {
@@ -140,6 +192,20 @@
 
   // 起動時に設定を読み込む
   onMount(async () => {
+    const graphSessionId = crypto.randomUUID();
+    linkGraphSessionId = graphSessionId;
+    void invoke<LinkGraphWindowSnapshot>("begin_link_graph_window_context_session", {
+      sessionId: graphSessionId,
+    })
+      .then((snapshot) => {
+        if (destroyed || linkGraphSessionId !== graphSessionId) return;
+        latestLinkGraphSnapshot = snapshot;
+        linkGraphSessionReady = true;
+      })
+      .catch((error) => {
+        console.error("リンクグラフの同期を開始できませんでした:", error);
+      });
+
     tocMediaQuery = window.matchMedia(TOC_DRAWER_MEDIA_QUERY);
     syncTocLayout(tocMediaQuery);
     tocMediaQuery.addEventListener("change", syncTocLayout);
@@ -154,6 +220,7 @@
           flushRecent(),
           flushSettings(),
         ]);
+        await invoke("close_link_graph_window").catch(() => {});
         unlistenCloseRequested?.();
         unlistenCloseRequested = undefined;
         await getCurrentWindow().close();
@@ -162,6 +229,36 @@
         if (destroyed) unlisten();
         else unlistenCloseRequested = unlisten;
       });
+
+    void listen<LinkGraphDocumentOpenRequest>(LINK_GRAPH_OPEN_DOCUMENT_EVENT, (event) => {
+      const currentSnapshot = {
+        ...latestLinkGraphSnapshot,
+        context: currentLinkGraphContext(),
+      };
+      const active = tabStore.tabs.find((tab) => tab.id === tabStore.activeTabId);
+      if (!active?.source) return;
+      void handleLinkGraphOpenRequest(
+        event.payload,
+        currentSnapshot,
+        active.source,
+        openSourceMarkdown,
+        async (error, target) => {
+          const { message } = await import("@tauri-apps/plugin-dialog");
+          await message(i18n.m.dialog.openFileFailed(target.path, error), {
+            title: i18n.m.common.error,
+            kind: "error",
+          });
+        }
+      );
+    }).then((unlisten) => {
+      if (destroyed) unlisten();
+      else unlistenLinkGraphOpenDocument = unlisten;
+    });
+    linkGraphThemeObserver = new MutationObserver(publishLinkGraphContext);
+    linkGraphThemeObserver.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ["class"],
+    });
 
     // 引数本体はRust側のキューにあり、このイベントは起床通知に過ぎない。
     // 通知を再読み込み中に取りこぼしても、下の初期回収で復元できる。
@@ -287,6 +384,8 @@
     if (unlistenCliArgs) unlistenCliArgs();
     stopCustomCss?.();
     unlistenCloseRequested?.();
+    unlistenLinkGraphOpenDocument?.();
+    linkGraphThemeObserver?.disconnect();
     if (hydrated && !sessionRestorePromptStore.visible) void saveTabs();
     void Promise.all([flushTabs(), flushRecent(), flushSettings()]);
   });
@@ -316,6 +415,18 @@
   $effect(() => {
     const active = tabStore.tabs.find((t) => t.id === tabStore.activeTabId);
     if (active) untrack(() => historyStore.record(active.path));
+  });
+
+  $effect(() => {
+    void tabStore.activeTabId;
+    void tabStore.tabs;
+    void linkInspectorStore.revision;
+    void settingsStore.settings.showHiddenFiles;
+    void settingsStore.settings.respectGitignore;
+    void settingsStore.settings.renderers["wiki-links"];
+    void settingsStore.settings.theme;
+    void i18n.locale;
+    publishLinkGraphContext();
   });
 
   // マウスの戻る/進むボタン（XButton1/2）で履歴を移動する

@@ -190,6 +190,17 @@ pub struct LinkContextResponse {
     truncated: bool,
 }
 
+impl LinkContextResponse {
+    pub(crate) fn openable_documents(&self) -> HashSet<DocumentRef> {
+        self.outgoing
+            .items
+            .iter()
+            .filter_map(|edge| edge.target.clone())
+            .chain(self.incoming.items.iter().map(|edge| edge.source.clone()))
+            .collect()
+    }
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 struct LinkCacheKey {
     source_id: String,
