@@ -21,7 +21,7 @@
 - [x] 2.3 外部URL、画像、生HTML、コード、非Markdown、Source外リンクの除外をテストする
 - [x] 2.4 リンク切れ、重複参照、自己参照、Wiki／Markdown混在をテストする
 - [x] 2.5 Native/ZIP、隠しファイル、gitignore、generation、TTL、上限到達をテストする
-- [ ] 2.6 100,000件の異なるリンク切れと長いanchorでメモリ・応答上限をテストする
+- [x] 2.6 100,000件の異なるリンク切れと長いanchorでメモリ・応答上限をテストする
 - [x] 2.7 Wikiプラグイン無効／有効時の抽出結果とキャッシュ分離をテストする
 - [x] 2.8 `rawTarget`のbroken限定契約と`total`のSome／Noneをテストする
 
@@ -47,13 +47,13 @@
 - [x] 4.7 ノード選択、キーボード操作、リンク切れ表示、メニュー非表示を実装する
 - [x] 4.8 グラフモデルの上限・ノード統合・アクセシビリティ・逆順更新・古い遷移拒否の
       テストを追加する
-- [ ] 4.9 WebView2でNative/ZIPのグラフ表示、同心円配置、リサイズ、メニュー非表示、
+- [x] 4.9 WebView2でNative/ZIPのグラフ表示、同心円配置、リサイズ、メニュー非表示、
       文書追従、ノード遷移を確認する
 
 ## 5. 完了検査
 
 - [x] 5.1 `npm run format`、`npm run lint`、`npm run check`、`npm test`を実行する
 - [x] 5.2 `cargo fmt`、`cargo clippy -- -D warnings`、Rustテストを実行する
-- [ ] 5.3 Windows WebView2スモークテストを実行する
+- [x] 5.3 Windows WebView2スモークテストを実行する
 - [x] 5.4 設計・差分レビューを実施し、P0〜P2を解消する
 - [x] 5.5 ファイル・パス・HTML/SVGを対象とするセキュリティレビューを実施し、P0〜P2を解消する

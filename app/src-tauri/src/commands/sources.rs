@@ -2687,6 +2687,79 @@ mod tests {
     }
 
     #[test]
+    fn native_link_index_bounds_many_distinct_broken_links_and_long_anchors() {
+        let directory = tempfile::tempdir().unwrap();
+        let long_anchor = "a".repeat(48);
+        let mut markdown = String::with_capacity(10 * 1024 * 1024);
+        for index in 0..100_000 {
+            markdown.push_str(&format!("[missing](missing-{index:06}.md#{long_anchor})\n"));
+        }
+        std::fs::write(directory.path().join("current.md"), markdown).unwrap();
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let backend = SourceBackend::Native(NativeSource {
+            root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
+        });
+
+        let index = build_link_index(&backend, true, false, true, &roots).unwrap();
+        let broken_ids = &index.broken_by_source["current.md"];
+
+        assert!(index.truncated);
+        assert!(broken_ids.len() <= MAX_LINK_EDGES_PER_DOCUMENT);
+        let retained_string_bytes = broken_ids
+            .iter()
+            .map(|edge_id| {
+                let edge = &index.edges[*edge_id];
+                edge.raw_target.as_ref().map_or(0, String::len)
+                    + edge.anchor.as_ref().map_or(0, String::len)
+            })
+            .sum::<usize>();
+        assert!(retained_string_bytes <= MAX_LINK_STRINGS_PER_DOCUMENT);
+
+        let mut remaining = MAX_LINK_CONTEXT_BYTES;
+        let (response, omitted) = index.section(broken_ids, "current.md", &mut remaining);
+        assert!(omitted);
+        assert!(response.items.len() <= MAX_LINK_CONTEXT_ITEMS);
+        assert_eq!(response.total, None);
+        assert!(remaining < MAX_LINK_CONTEXT_BYTES);
+    }
+
+    #[test]
+    fn native_link_index_bounds_long_anchor_strings_before_edge_limit() {
+        let directory = tempfile::tempdir().unwrap();
+        let long_anchor = "a".repeat(512);
+        let mut markdown = String::with_capacity(2 * 1024 * 1024);
+        for index in 0..3_000 {
+            markdown.push_str(&format!("[missing](missing-{index:04}.md#{long_anchor})\n"));
+        }
+        std::fs::write(directory.path().join("current.md"), markdown).unwrap();
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let backend = SourceBackend::Native(NativeSource {
+            root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
+        });
+
+        let index = build_link_index(&backend, true, false, true, &roots).unwrap();
+        let broken_ids = &index.broken_by_source["current.md"];
+        let retained_string_bytes = broken_ids
+            .iter()
+            .map(|edge_id| {
+                let edge = &index.edges[*edge_id];
+                edge.raw_target.as_ref().map_or(0, String::len)
+                    + edge.anchor.as_ref().map_or(0, String::len)
+            })
+            .sum::<usize>();
+        let next_edge_bytes = "missing-0000.md".len() + long_anchor.len();
+
+        assert!(index.truncated);
+        assert!(broken_ids.len() < MAX_LINK_EDGES_PER_DOCUMENT);
+        assert!(retained_string_bytes <= MAX_LINK_STRINGS_PER_DOCUMENT);
+        assert!(
+            retained_string_bytes.saturating_add(next_edge_bytes) > MAX_LINK_STRINGS_PER_DOCUMENT
+        );
+    }
+
+    #[test]
     fn native_markdown_collection_reports_entry_limit() {
         let directory = tempfile::tempdir().unwrap();
         std::fs::write(directory.path().join("one.md"), "# One").unwrap();
