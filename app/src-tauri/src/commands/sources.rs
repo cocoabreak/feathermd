@@ -1692,7 +1692,8 @@ fn resolve_markdown_link(
     native_paths_lower: &HashMap<String, String>,
 ) -> MarkdownLinkResolution {
     let normalized_target = raw_target.replace('\\', "/");
-    if normalized_target.starts_with('/')
+    if normalized_target.contains('\0')
+        || normalized_target.starts_with('/')
         || normalized_target.starts_with("//")
         || normalized_target
             .as_bytes()
@@ -2487,6 +2488,30 @@ mod tests {
                 &paths,
                 &lower
             ),
+            MarkdownLinkResolution::Excluded
+        ));
+        assert!(matches!(
+            resolve_markdown_link(
+                "guide/current.md",
+                "C:/notes/target.md",
+                &backend,
+                &paths,
+                &lower
+            ),
+            MarkdownLinkResolution::Excluded
+        ));
+        assert!(matches!(
+            resolve_markdown_link(
+                "guide/current.md",
+                "//server/share/target.md",
+                &backend,
+                &paths,
+                &lower
+            ),
+            MarkdownLinkResolution::Excluded
+        ));
+        assert!(matches!(
+            resolve_markdown_link("guide/current.md", "bad\0name.md", &backend, &paths, &lower),
             MarkdownLinkResolution::Excluded
         ));
     }

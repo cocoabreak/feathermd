@@ -27,8 +27,9 @@ MarkdownViewer内のローカルリンク
 Wikiリンクはプラグインの`postRender`開始時に、モジュール内の
 `WeakMap<HTMLAnchorElement, LinkTargetState>`へ`pending`を登録する。解決後は`href`を設定して
 `resolved(DocumentRef)`、未解決なら`missing`へ遷移する。Source IDやDocumentRefをDOM属性へ
-保存しない。Markdownリンクは信頼済みの`PostRenderContext`と既存
-`resolveDocumentTarget`から`DocumentRef`を得る。
+保存しない。Markdownリンクは信頼済みの`PostRenderContext`と受動処理専用の
+`resolveSourceRelativeMarkdownTarget`から`DocumentRef`を得る。絶対パスやSource外リンクは
+プレビューせず、クリック時だけ既存の明示確認経路へ委譲する。
 
 ```ts
 type LinkTargetState =

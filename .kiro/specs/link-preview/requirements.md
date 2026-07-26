@@ -25,6 +25,7 @@ GitHub Issue: #2
 ## 対象外
 
 - 外部Webページ、画像、Markdown以外のファイル
+- NativeSourceの絶対パスリンク（同一信頼ルート内を含む。明示クリック時の既存遷移は維持）
 - NativeSourceの信頼ルート外リンク、ZipSource外リンク
 - プレビュー本文のMarkdown／HTML再レンダリング
 - プレビュー内リンクの連続遷移

@@ -1,4 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
+import { isMarkdownPath } from "$lib/markdown/extensions";
 import type { DocumentRef, DocumentSourceInfo, FileEntry } from "$lib/types";
 import { normalizePath } from "$lib/utils";
 
@@ -106,6 +107,33 @@ export function resolveDocumentPath(base: DocumentRef, target: string): Document
     }
   }
   return { sourceId: base.sourceId, path: resolved.join("/") };
+}
+
+export interface SourceRelativeMarkdownTarget {
+  document: DocumentRef;
+  anchor: string | null;
+}
+
+/**
+ * 索引やプレビュー等の受動処理向けに、Source相対のMarkdown文書リンクだけを解決する。
+ * 絶対パスを扱う既存の明示クリック経路とは意図的に分離する。
+ */
+export function resolveSourceRelativeMarkdownTarget(
+  base: DocumentRef,
+  rawTarget: string
+): SourceRelativeMarkdownTarget | null {
+  const trimmed = rawTarget.trim();
+  if (!trimmed || trimmed.includes("\0") || trimmed.includes("?")) return null;
+
+  const hashIndex = trimmed.indexOf("#");
+  const target = (hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed).trim();
+  const rawAnchor = hashIndex >= 0 ? trimmed.slice(hashIndex + 1).trim() : "";
+  if (!target || !isMarkdownPath(target) || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(target)) {
+    return null;
+  }
+
+  const document = resolveDocumentPath(base, target);
+  return document ? { document, anchor: rawAnchor || null } : null;
 }
 
 export function resolveDocumentTarget(
