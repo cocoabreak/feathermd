@@ -6,6 +6,7 @@ import {
   nativePathToDocument,
   resolveDocumentPath,
   resolveDocumentTarget,
+  resolveSourceRelativeMarkdownTarget,
 } from "$lib/document-sources";
 
 const nativeSource: DocumentSourceInfo = {
@@ -66,6 +67,38 @@ describe("document source paths", () => {
   it("ZIPではOS絶対パスを受け入れない", () => {
     const base = { sourceId: "zip-1", path: "guide/start.md" };
     expect(resolveDocumentTarget(zipSource, base, "C:/notes/README.md")).toBeNull();
+  });
+
+  it.each([
+    ["../README.md#Intro", "README.md", "Intro"],
+    ["..\\README.markdown", "README.markdown", null],
+    ["./details.md", "guide/details.md", null],
+    ["missing.md", "guide/missing.md", null],
+  ])(
+    "Source相対Markdownリンク %s を受動処理用DocumentRefへ解決する",
+    (target, expectedPath, expectedAnchor) => {
+      const base: DocumentRef = { sourceId: "native-1", path: "guide/start.md" };
+      expect(resolveSourceRelativeMarkdownTarget(base, target)).toEqual({
+        document: { sourceId: "native-1", path: expectedPath },
+        anchor: expectedAnchor,
+      });
+    }
+  );
+
+  it.each([
+    "C:/notes/README.md",
+    "/notes/README.md",
+    "//server/share/README.md",
+    "\\\\server\\share\\README.md",
+    "../../secret.md",
+    "https://example.com/README.md",
+    "README.md?raw=1",
+    "#Intro",
+    "image.png",
+    "bad\0name.md",
+  ])("受動処理では絶対・Source外・非Markdownリンク %s を拒否する", (target) => {
+    const base: DocumentRef = { sourceId: "native-1", path: "guide/start.md" };
+    expect(resolveSourceRelativeMarkdownTarget(base, target)).toBeNull();
   });
 
   it("異なるNativeソースから参照した同じ実ファイルを同一と判定する", () => {

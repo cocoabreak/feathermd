@@ -18,7 +18,7 @@
   import { sessionRestorePromptStore } from "$lib/stores/session-restore-prompt.svelte";
   import FileTree from "./FileTree.svelte";
   import GlobalSearchPanel from "./GlobalSearchPanel.svelte";
-  import BacklinksPanel from "./BacklinksPanel.svelte";
+  import LinkInspectorPanel from "./LinkInspectorPanel.svelte";
   import ResizeHandle from "./ResizeHandle.svelte";
   import { uiStore } from "$lib/stores/ui.svelte";
   import {
@@ -106,11 +106,11 @@
     </button>
     <button
       class="flex h-full w-9 shrink-0 items-center justify-center hover:bg-muted/50"
-      class:bg-muted={uiStore.sidebarActiveTab === "backlinks"}
-      class:text-foreground={uiStore.sidebarActiveTab === "backlinks"}
-      onclick={() => uiStore.setSidebarActiveTab("backlinks")}
-      title={m.sidebar.backlinks}
-      aria-label={m.sidebar.backlinks}
+      class:bg-muted={uiStore.sidebarActiveTab === "links"}
+      class:text-foreground={uiStore.sidebarActiveTab === "links"}
+      onclick={() => uiStore.setSidebarActiveTab("links")}
+      title={m.sidebar.links}
+      aria-label={m.sidebar.links}
     >
       <Link2 size={14} />
     </button>
@@ -228,9 +228,9 @@
       <div class="flex-1 overflow-y-auto py-1">
         <GlobalSearchPanel />
       </div>
-    {:else if uiStore.sidebarActiveTab === "backlinks"}
+    {:else if uiStore.sidebarActiveTab === "links"}
       <div class="flex-1 overflow-hidden">
-        <BacklinksPanel />
+        <LinkInspectorPanel />
       </div>
     {/if}
   </div>
