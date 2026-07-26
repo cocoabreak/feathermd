@@ -57,6 +57,7 @@
     "allow-unregister-source",
     "allow-list-source-entries",
     "allow-list-source-markdown-documents",
+    "allow-read-source-link-preview",
     "allow-read-source-markdown",
     "allow-read-source-image",
     "allow-search-source",

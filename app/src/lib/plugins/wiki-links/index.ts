@@ -14,6 +14,41 @@ type InlineRule = Parameters<MarkdownIt["inline"]["ruler"]["before"]>[2];
 
 const LBRACKET = 0x5b; // [
 
+export type WikiLinkTargetState =
+  | { status: "pending" }
+  | { status: "resolved"; document: DocumentRef; anchor: string | null }
+  | { status: "missing" };
+
+const linkTargetStates = new WeakMap<HTMLAnchorElement, WikiLinkTargetState>();
+const linkTargetWatchers = new WeakMap<
+  HTMLAnchorElement,
+  Set<(state: WikiLinkTargetState) => void>
+>();
+
+export function getWikiLinkTarget(anchor: HTMLAnchorElement): WikiLinkTargetState | null {
+  return linkTargetStates.get(anchor) ?? null;
+}
+
+export function watchWikiLinkTarget(
+  anchor: HTMLAnchorElement,
+  callback: (state: WikiLinkTargetState) => void
+): () => void {
+  const watchers = linkTargetWatchers.get(anchor) ?? new Set();
+  watchers.add(callback);
+  linkTargetWatchers.set(anchor, watchers);
+  const current = linkTargetStates.get(anchor);
+  if (current) callback(current);
+  return () => {
+    watchers.delete(callback);
+    if (watchers.size === 0) linkTargetWatchers.delete(anchor);
+  };
+}
+
+function setWikiLinkTarget(anchor: HTMLAnchorElement, state: WikiLinkTargetState): void {
+  linkTargetStates.set(anchor, state);
+  for (const watcher of linkTargetWatchers.get(anchor) ?? []) watcher(state);
+}
+
 /**
  * `[[ターゲット(#見出し)?(|エイリアス)?]]` をパースするmarkdown-it inlineルール。
  * この時点ではhrefを付与しない（絶対パスhrefはDOMPurifyのURIスキーム検査で剥がれるため、
@@ -120,9 +155,15 @@ async function resolveLinks(
         ...to.slice(common),
       ].join("/");
       a.setAttribute("href", hash ? `${relative}#${hash}` : relative);
+      setWikiLinkTarget(a, {
+        status: "resolved",
+        document,
+        anchor: hash || null,
+      });
     } else {
       a.classList.add("wiki-link-missing");
       a.title = MESSAGES[context.locale].missing;
+      setWikiLinkTarget(a, { status: "missing" });
     }
   }
 }
@@ -146,10 +187,12 @@ const wikiLinksPlugin: ViewerPlugin = {
     if (pending.length === 0 || !context.filePath) return;
 
     ensureStyles();
+    for (const anchor of pending) setWikiLinkTarget(anchor, { status: "pending" });
     let cancelled = false;
     void resolveLinks(pending, context, () => cancelled);
     return () => {
       cancelled = true;
+      for (const anchor of pending) linkTargetStates.delete(anchor);
     };
   },
 };

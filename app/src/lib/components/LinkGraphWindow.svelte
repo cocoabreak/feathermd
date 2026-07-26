@@ -3,11 +3,14 @@
   import { invoke } from "@tauri-apps/api/core";
   import { onMount } from "svelte";
   import LinkGraphView from "$lib/components/LinkGraphView.svelte";
+  import LinkPreviewPopover from "$lib/components/LinkPreviewPopover.svelte";
   import type { LinkGraphWindowContext, LinkGraphWindowSnapshot } from "$lib/link-graph-window";
   import type { LinkContextResponse } from "$lib/stores/links.svelte";
   import { i18n } from "$lib/i18n/index.svelte";
+  import { LinkPreviewStore } from "$lib/stores/link-preview.svelte";
 
   const m = $derived(i18n.m);
+  const previewStore = new LinkPreviewStore();
   let context = $state<LinkGraphWindowContext | null>(null);
   let response = $state<LinkContextResponse | null>(null);
   let loading = $state(false);
@@ -24,9 +27,19 @@
       !previous ||
       previous.document.sourceId !== next.context.document.sourceId ||
       previous.document.path !== next.context.document.path;
+    const sourceChanged =
+      !previous ||
+      previous.document.sourceId !== next.context.document.sourceId ||
+      previous.sourceGeneration !== next.context.sourceGeneration;
+    const revisionChanged = !!previous && previous.revision !== next.context.revision;
     snapshot = next;
     context = next.context;
     if (documentChanged) response = null;
+    if (documentChanged) previewStore.close();
+    if (revisionChanged && !sourceChanged) {
+      previewStore.invalidateSource(next.context.document.sourceId);
+    }
+    previewStore.syncScope(next.context.document.sourceId, next.context.sourceGeneration);
     i18n.setLocale(next.context.locale);
     document.documentElement.classList.toggle("dark", next.context.dark);
     loading = true;
@@ -62,6 +75,7 @@
         response = null;
         error = null;
         loading = false;
+        previewStore.close();
       }
     } catch (syncError) {
       error = String(syncError);
@@ -76,6 +90,7 @@
     return () => {
       window.clearInterval(timer);
       requestId++;
+      previewStore.close();
     };
   });
 </script>
@@ -123,6 +138,24 @@
           });
         }
       }}
+      onpreview={(node, getRect, immediate) => {
+        if (!context) return;
+        if (node.document) {
+          previewStore.begin(
+            {
+              current: context.document,
+              target: node.document,
+              sourceGeneration: context.sourceGeneration,
+              anchor: null,
+              getRect,
+            },
+            immediate ? 0 : 450
+          );
+        } else {
+          previewStore.beginMissing(node.path, getRect, immediate ? 0 : 450);
+        }
+      }}
+      onpreviewleave={() => previewStore.hide()}
     />
   {:else}
     <div class="m-auto text-sm text-muted-foreground">
@@ -130,3 +163,5 @@
     </div>
   {/if}
 </main>
+
+<LinkPreviewPopover store={previewStore} />

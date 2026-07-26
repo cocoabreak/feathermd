@@ -6,7 +6,7 @@
 
 ## 1. 全体構成
 
-MarkdownViewerのDOM後処理として対象リンクへイベントを設定し、解決済み`DocumentRef`を
+MarkdownViewerのDOM後処理またはCytoscapeのノードイベントから、解決済み`DocumentRef`を
 プレビューStoreへ渡す。リンク索引全体は要求せず、対象文書の先頭だけをRust側で制限読込する。
 
 ```text
@@ -23,6 +23,11 @@ MarkdownViewer内のローカルリンク
           |
  LinkPreviewPopover
 ```
+
+グラフウインドウは別WebViewであるため、メインウインドウとStoreを共有しない。
+`LinkGraphWindow.svelte`にStoreとPopoverを1つ配置し、`LinkGraphView.svelte`がCytoscapeの
+`mouseover` / `mouseout`とキーボード選択を、`DocumentRef`およびノードの描画境界とともに渡す。
+壊れたリンクのノードは`DocumentRef`を持たないため、Rustへ要求せずmissing状態を表示する。
 
 Wikiリンクはプラグインの`postRender`開始時に、モジュール内の
 `WeakMap<HTMLAnchorElement, LinkTargetState>`へ`pending`を登録する。解決後は`href`を設定して
@@ -55,8 +60,11 @@ enum LinkPreviewReadResponse {
         raw_prefix: String,
         byte_size: u64,
         truncated: bool,
+        source_generation: u64,
     },
-    Missing,
+    Missing {
+        source_generation: u64,
+    },
 }
 
 read_source_link_preview(
@@ -67,6 +75,8 @@ read_source_link_preview(
 
 Rust側で`current.source_id == target.source_id`を必須とし、両方をSourceRegistryで検証する。
 WebViewから別Source ID、偽造パス、存在しないSourceを渡した場合は読込前に拒否する。
+リンクグラフWebViewからの呼出しは、現在コンテキストの文書と、Rustが直前のグラフ応答で
+返した解決済みDocumentRef集合へ限定する。メイン／グラフ以外のウインドウは拒否する。
 同一Source内で正規化済み対象文書が存在しない場合だけ`Missing`を返す。AllowedRoots違反、
 危険なZIP entry、UTF-8不正、非Markdown、ロック失敗などは`Err`とし、フロントでは共通の
 安全なエラー表示へ変換する。エラー文字列からmissingを判定しない。
@@ -126,6 +136,12 @@ cleanupでタイマーとリスナーを必ず解除する。
 `relatedTarget`とStoreのアンカーIDで判定する。キーボード操作では起点リンクにフォーカスを
 維持する。新しいリンクを対象にした時点でrequest IDを更新し、古いinvoke結果を破棄する。
 
+グラフ用アダプターはCytoscapeのイベントAPIへ登録し、ノードIDから`LinkGraphNode`を
+信頼済みのメモリ上Mapで取得する。`DocumentRef`やSource IDをCytoscapeの`data`またはDOM属性へ
+複製せず、Storeへ直接渡す。表示位置はノードの`renderedBoundingBox()`とグラフコンテナの
+`getBoundingClientRect()`からビューポート座標へ変換する。キーボード選択時も同じ経路へ
+仮想起点矩形を渡し、ノード選択が変わるたびlatest-onlyで更新する。
+
 ## 5. Storeとキャッシュ
 
 `LinkPreviewStore`は以下を保持する。
@@ -142,7 +158,8 @@ cleanupでタイマーとリスナーを必ず解除する。
 
 ## 6. ポップオーバー
 
-`LinkPreviewPopover.svelte`を`+page.svelte`直下へ1個だけ配置する。`position: fixed`で
+`LinkPreviewPopover.svelte`をメインウインドウの`+page.svelte`直下と、
+別WebViewである`LinkGraphWindow.svelte`直下へ各1個だけ配置する。`position: fixed`で
 起点リンクの下側を優先し、収まらない場合は上側へ反転する。左右は8pxのビューポート余白内へ
 クランプする。スクロールとresize時に位置を更新する。
 
@@ -164,13 +181,16 @@ cleanupでタイマーとリスナーを必ず解除する。
 - 読込・UTF-8・ZIP検証失敗: 詳細な内部パスを出さずerror表示
 - 起点要素がDOMから消えた: ポップオーバーを閉じる
 - 文書再レンダリング: cleanup後に新しいコンテナ状態へ再設定
+- グラフコンテキスト更新・ノード削除・ウインドウ終了: タイマーと要求を破棄して閉じる
 
 ## 8. 安全性
 
 - DocumentRefをRust側SourceRegistryで再検証する
 - currentとtargetのSource ID一致をRust側でfail-closedに検証する
+- グラフWebViewは現在コンテキストとRustが返した解決済みDocumentRefだけを読込可能にする
 - WikiリンクのDocumentRefはWeakMapへ保持し、偽造可能なDOM属性を信頼しない
 - レジストリ状態更新はモジュール関数だけに閉じ、DOMイベントのdetailを信頼しない
+- CytoscapeのノードdataやDOM属性からDocumentRefを復元せず、`LinkGraphNode`のメモリ上参照を使う
 - NativeのAllowedRoots、最終ファイルハンドル、Zipの検証済みentryを再利用する
 - 256KiBを実読込量で強制し、宣言サイズだけを信用しない
 - Markdown・frontmatter値をHTMLとして挿入しない
@@ -190,3 +210,4 @@ cleanupでタイマーとリスナーを必ず解除する。
 - 生HTMLで偽造したclass・data属性・別Source IDからプレビュー読込できないことの境界テスト
 - ポップオーバー位置反転・クランプ・アクセシビリティのコンポーネントテスト
 - WebView2でWiki／Markdown、見出し、リンク切れ、キーボード操作を確認する
+- WebView2のリンクグラフで解決済み・現在文書・リンク切れノード、マウス・キーボード操作を確認する

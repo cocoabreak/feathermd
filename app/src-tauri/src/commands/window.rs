@@ -10,14 +10,15 @@ use super::{
     },
 };
 
-const LINK_GRAPH_WINDOW_LABEL: &str = "link-graph";
-const MAIN_WINDOW_LABEL: &str = "main";
+pub(crate) const LINK_GRAPH_WINDOW_LABEL: &str = "link-graph";
+pub(crate) const MAIN_WINDOW_LABEL: &str = "main";
 const LINK_GRAPH_OPEN_DOCUMENT_EVENT: &str = "link-graph-open-document";
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase")]
 pub struct LinkGraphWindowContext {
     document: DocumentRef,
+    source_generation: u64,
     revision: u64,
     show_hidden_files: bool,
     respect_gitignore: bool,
@@ -51,6 +52,22 @@ struct LinkGraphWindowStateInner {
 
 #[derive(Debug, Default)]
 pub struct LinkGraphWindowState(Mutex<LinkGraphWindowStateInner>);
+
+impl LinkGraphWindowState {
+    pub(crate) fn allows_preview(
+        &self,
+        current: &DocumentRef,
+        target: &DocumentRef,
+    ) -> Result<bool, String> {
+        let state = self.0.lock().map_err(|error| error.to_string())?;
+        Ok(state
+            .snapshot
+            .context
+            .as_ref()
+            .is_some_and(|context| &context.document == current)
+            && (target == current || state.openable_documents.contains(target)))
+    }
+}
 
 #[derive(Clone, Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -248,9 +265,11 @@ pub fn request_link_graph_document_open(
 #[cfg(test)]
 mod tests {
     use super::{
-        apply_context_update, begin_context_session, LinkGraphWindowContextUpdate,
-        LinkGraphWindowStateInner,
+        apply_context_update, begin_context_session, LinkGraphWindowContext,
+        LinkGraphWindowContextUpdate, LinkGraphWindowState, LinkGraphWindowStateInner,
     };
+    use crate::commands::sources::DocumentRef;
+    use std::sync::Mutex;
 
     #[test]
     fn older_context_cannot_overwrite_newer_context_and_reload_starts_a_new_session() {
@@ -285,5 +304,47 @@ mod tests {
             },
         );
         assert_eq!(stale.context_version, 3);
+    }
+
+    #[test]
+    fn graph_preview_is_limited_to_current_and_returned_documents() {
+        let current_document = DocumentRef {
+            source_id: "source-1".to_string(),
+            path: "current.md".to_string(),
+        };
+        let returned_document = DocumentRef {
+            source_id: "source-1".to_string(),
+            path: "returned.md".to_string(),
+        };
+        let unreturned_document = DocumentRef {
+            source_id: "source-1".to_string(),
+            path: "secret.md".to_string(),
+        };
+        let mut inner = LinkGraphWindowStateInner::default();
+        inner.snapshot.context = Some(LinkGraphWindowContext {
+            document: current_document.clone(),
+            source_generation: 0,
+            revision: 0,
+            show_hidden_files: false,
+            respect_gitignore: true,
+            include_wiki_links: true,
+            locale: "ja".to_string(),
+            dark: false,
+        });
+        inner.openable_documents.insert(returned_document.clone());
+        let state = LinkGraphWindowState(Mutex::new(inner));
+
+        assert!(state
+            .allows_preview(&current_document, &current_document)
+            .unwrap());
+        assert!(state
+            .allows_preview(&current_document, &returned_document)
+            .unwrap());
+        assert!(!state
+            .allows_preview(&current_document, &unreturned_document)
+            .unwrap());
+        assert!(!state
+            .allows_preview(&unreturned_document, &returned_document)
+            .unwrap());
     }
 }

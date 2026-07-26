@@ -50,6 +50,7 @@ fn main() {
             "unregister_source",
             "list_source_entries",
             "list_source_markdown_documents",
+            "read_source_link_preview",
             "read_source_markdown",
             "read_source_image",
             "search_source",

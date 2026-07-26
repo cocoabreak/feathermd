@@ -235,6 +235,16 @@ export const en: typeof ja = {
     resultsLimited: (count: number) => `${count} links omitted`,
     resultsLimitedUnknown: "Only some links are shown because the processing limit was reached",
   },
+  linkPreview: {
+    loading: "Loading preview...",
+    missing: "Link target not found",
+    failed: "Could not display the preview",
+    headingOutOfRange: "The heading is outside the preview range",
+    noExcerpt: "No previewable text",
+    aliases: "Aliases:",
+    tags: "Tags:",
+    truncated: "Some content was omitted",
+  },
   sessionRestore: {
     prompt: "Restore your previous session?",
     restore: "Restore",

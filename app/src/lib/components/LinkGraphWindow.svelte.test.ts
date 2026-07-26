@@ -18,6 +18,7 @@ describe("LinkGraphWindow", () => {
     const target = { sourceId: "source-1", path: "guide/target.md" };
     const context = {
       document: current,
+      sourceGeneration: 3,
       revision: 0,
       showHiddenFiles: false,
       respectGitignore: true,
@@ -48,6 +49,15 @@ describe("LinkGraphWindow", () => {
         return Promise.resolve({ contextVersion: 7, context });
       }
       if (command === "get_link_graph_data") return Promise.resolve(response);
+      if (command === "read_source_link_preview") {
+        return Promise.resolve({
+          status: "ready",
+          rawPrefix: "---\ntitle: Graph preview\n---\nPreview body",
+          byteSize: 48,
+          truncated: false,
+          sourceGeneration: 3,
+        });
+      }
       return Promise.resolve(undefined);
     });
     const view = render(LinkGraphWindow);
@@ -60,6 +70,11 @@ describe("LinkGraphWindow", () => {
 
     await fireEvent.focus(graph);
     await fireEvent.keyDown(graph, { key: "ArrowRight" });
+    expect(await view.findByText("Graph preview")).toBeInTheDocument();
+    expect(invokeMock).toHaveBeenCalledWith("read_source_link_preview", {
+      current,
+      target,
+    });
     await fireEvent.keyDown(graph, { key: "Enter" });
     await waitFor(() =>
       expect(invokeMock).toHaveBeenCalledWith("request_link_graph_document_open", {
