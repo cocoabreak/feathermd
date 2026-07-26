@@ -136,6 +136,7 @@ pub fn run() {
             commands::sources::unregister_source,
             commands::sources::list_source_entries,
             commands::sources::list_source_markdown_documents,
+            commands::sources::read_source_link_preview,
             commands::sources::read_source_markdown,
             commands::sources::read_source_image,
             commands::sources::search_source,

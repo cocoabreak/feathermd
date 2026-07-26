@@ -16,6 +16,7 @@
   import UpdateNotification from "$lib/components/UpdateNotification.svelte";
   import QuickOpen from "$lib/components/QuickOpen.svelte";
   import CommandPalette from "$lib/components/CommandPalette.svelte";
+  import LinkPreviewPopover from "$lib/components/LinkPreviewPopover.svelte";
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { tabStore } from "$lib/stores/tab.svelte";
   import { contentStore } from "$lib/stores/content.svelte";
@@ -50,6 +51,7 @@
   import { updateCheckStore } from "$lib/stores/update-check.svelte";
   import { pickerStore } from "$lib/stores/picker.svelte";
   import { linkInspectorStore } from "$lib/stores/links.svelte";
+  import { linkPreviewStore } from "$lib/stores/link-preview.svelte";
   import { searchStore } from "$lib/stores/search.svelte";
   import { sessionUiStateStore } from "$lib/stores/session-ui-state.svelte";
   import {
@@ -94,6 +96,7 @@
     if (!active?.document || !active.source) return null;
     return {
       document: active.document,
+      sourceGeneration: active.source.generation ?? 0,
       revision: linkInspectorStore.revision,
       showHiddenFiles: settingsStore.settings.showHiddenFiles,
       respectGitignore: settingsStore.settings.respectGitignore,
@@ -201,6 +204,7 @@
         if (destroyed || linkGraphSessionId !== graphSessionId) return;
         latestLinkGraphSnapshot = snapshot;
         linkGraphSessionReady = true;
+        publishLinkGraphContext();
       })
       .catch((error) => {
         console.error("リンクグラフの同期を開始できませんでした:", error);
@@ -488,6 +492,7 @@
     keepListener(
       listen<string>("file-changed", async (event) => {
         linkInspectorStore.invalidate();
+        linkPreviewStore.invalidateAll();
         const changedPath = event.payload;
         const normalizedChangedPath = normalizePath(changedPath);
         try {
@@ -594,6 +599,7 @@
     keepListener(
       listen<string>("file-deleted", (event) => {
         linkInspectorStore.invalidate();
+        linkPreviewStore.invalidateAll();
         const deletedPath = event.payload;
         const normalizedDeletedPath = normalizePath(deletedPath);
         const deletedArchiveSourceIds = new Set(
@@ -632,6 +638,7 @@
     keepListener(
       listen<string>("directory-changed", (event) => {
         linkInspectorStore.invalidate();
+        linkPreviewStore.invalidateAll();
         void refreshDirectory(event.payload);
       })
     );
@@ -687,3 +694,4 @@
 
 <SessionRestoreToast />
 <UpdateNotification />
+<LinkPreviewPopover />

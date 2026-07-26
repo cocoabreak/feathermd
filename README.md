@@ -10,12 +10,24 @@ FeatherMD is a fast, read-only viewer for local Markdown files and Markdown docu
 
 > FeatherMD currently prioritizes Windows. Linux support is a secondary goal, and macOS support is lower priority.
 
+## See it in action
+
+<p align="center">
+  <img src="docs/images/feathermd-overview.png" alt="FeatherMD showing the link inspector and a local link preview" width="1000">
+</p>
+
+<p align="center"><em>Browse local Markdown links without losing your place.</em></p>
+
+<p align="center">
+  <img src="docs/images/link-preview-demo.gif" alt="Hover previews in a document and the local link graph" width="900">
+</p>
+
 ## Highlights
 
 - **Rich Markdown rendering** — CommonMark-style Markdown, GitHub-style tables and task lists, syntax highlighting with Shiki, KaTeX math, Mermaid diagrams, emoji, and YAML frontmatter.
 - **Native files and ZIP archives** — Open `.md` and `.markdown` files directly, or browse and view Markdown entries inside ZIP archives without extracting them first.
 - **Explorer and tabs** — Open a folder as the Explorer root, lazily browse Markdown files, open and reorder multiple tabs, pin tabs, reopen a closed tab, and track file changes automatically.
-- **Navigation** — Generated outline, Wiki links (`[[Page]]`), a link inspector with a detachable local link graph, local Markdown links, Back/Forward history, heading anchors, and scroll-position preservation per tab.
+- **Navigation** — Generated outline, Wiki links (`[[Page]]`), hover previews, a link inspector with a detachable local link graph, local Markdown links, Back/Forward history, heading anchors, and scroll-position preservation per tab.
 - **Search and quick access** — Find text in the current document, search the Explorer root, quickly open files by name, or find commands from the command palette.
 - **Images and diagrams** — Resolve trusted local images safely and inspect images or Mermaid diagrams in a zoomable, pannable lightbox.
 - **Desktop workflows** — Open files or folders from native dialogs, drag and drop, recent history, keyboard shortcuts, the command line, or the optional Windows Explorer context menu.

@@ -239,6 +239,16 @@ export const ja = {
     resultsLimited: (count: number) => `${count}件を省略しています`,
     resultsLimitedUnknown: "処理上限に達したため、一部のリンクだけを表示しています",
   },
+  linkPreview: {
+    loading: "プレビューを読み込んでいます...",
+    missing: "リンク先が見つかりません",
+    failed: "プレビューを表示できません",
+    headingOutOfRange: "見出しはプレビュー範囲外です",
+    noExcerpt: "表示できる本文はありません",
+    aliases: "別名:",
+    tags: "タグ:",
+    truncated: "一部を省略しています",
+  },
   sessionRestore: {
     prompt: "前回のセッションを復元しますか？",
     restore: "復元する",

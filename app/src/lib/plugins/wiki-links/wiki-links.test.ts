@@ -1,6 +1,9 @@
 import MarkdownIt from "markdown-it";
-import { beforeAll, describe, expect, it } from "vitest";
-import wikiLinksPlugin from "./index";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import wikiLinksPlugin, { getWikiLinkTarget, watchWikiLinkTarget } from "./index";
+
+const { invokeMock } = vi.hoisted(() => ({ invokeMock: vi.fn() }));
+vi.mock("@tauri-apps/api/core", () => ({ invoke: invokeMock }));
 
 // パース（extendMarkdownIt）のテスト。リンク解決（postRender/Rust側）はRustユニットテストと
 // 実機確認でカバーする
@@ -61,5 +64,74 @@ describe("wiki-linksプラグインのパース", () => {
     expect(html).toContain("&quot;");
     expect(html).toContain("&lt;x&gt;");
     expect(html).not.toContain("<x>");
+  });
+});
+
+describe("wiki-linksプラグインの解決状態", () => {
+  beforeEach(() => invokeMock.mockReset());
+
+  it("pendingからRust検証済みDocumentRefへ購読通知する", async () => {
+    const container = document.createElement("div");
+    container.innerHTML =
+      '<a class="wiki-link" data-wiki-target="Setup" data-wiki-hash="手順">Setup</a>';
+    const anchor = container.querySelector("a")!;
+    invokeMock.mockResolvedValue({
+      Setup: { sourceId: "source", path: "guide/setup.md" },
+    });
+    const cleanup = wikiLinksPlugin.postRender?.(container, {
+      document: { sourceId: "source", path: "index.md" },
+      source: null,
+      filePath: "index.md",
+      rootPath: null,
+      respectGitignore: true,
+      locale: "ja",
+      externalImagesAllowed: false,
+      onExternalImagesBlocked: () => {},
+    });
+    const states: string[] = [];
+    const stop = watchWikiLinkTarget(anchor, (state) => states.push(state.status));
+
+    await vi.waitFor(() => expect(getWikiLinkTarget(anchor)?.status).toBe("resolved"));
+    expect(states).toEqual(["pending", "resolved"]);
+    expect(anchor.getAttribute("href")).toBe("guide/setup.md#手順");
+    stop();
+    cleanup?.();
+    expect(getWikiLinkTarget(anchor)).toBeNull();
+  });
+
+  it("missingを通知しcleanup後の遅延応答は無視する", async () => {
+    const context = {
+      document: { sourceId: "source", path: "index.md" },
+      source: null,
+      filePath: "index.md",
+      rootPath: null,
+      respectGitignore: true,
+      locale: "ja" as const,
+      externalImagesAllowed: false,
+      onExternalImagesBlocked: () => {},
+    };
+    const missingContainer = document.createElement("div");
+    missingContainer.innerHTML = '<a class="wiki-link" data-wiki-target="Missing">Missing</a>';
+    const missingAnchor = missingContainer.querySelector("a")!;
+    invokeMock.mockResolvedValueOnce({ Missing: null });
+    const cleanupMissing = wikiLinksPlugin.postRender?.(missingContainer, context);
+    const states: string[] = [];
+    watchWikiLinkTarget(missingAnchor, (state) => states.push(state.status));
+    await vi.waitFor(() => expect(getWikiLinkTarget(missingAnchor)?.status).toBe("missing"));
+    expect(states).toEqual(["pending", "missing"]);
+    cleanupMissing?.();
+
+    let resolve!: (value: Record<string, null>) => void;
+    invokeMock.mockReturnValueOnce(new Promise((done) => (resolve = done)));
+    const staleContainer = document.createElement("div");
+    staleContainer.innerHTML = '<a class="wiki-link" data-wiki-target="Stale">Stale</a>';
+    const staleAnchor = staleContainer.querySelector("a")!;
+    const cleanupStale = wikiLinksPlugin.postRender?.(staleContainer, context);
+    expect(getWikiLinkTarget(staleAnchor)?.status).toBe("pending");
+    cleanupStale?.();
+    resolve({ Stale: null });
+    await Promise.resolve();
+    expect(getWikiLinkTarget(staleAnchor)).toBeNull();
+    expect(staleAnchor).not.toHaveClass("wiki-link-missing");
   });
 });

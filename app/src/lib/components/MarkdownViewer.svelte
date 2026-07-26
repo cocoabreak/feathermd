@@ -16,6 +16,7 @@
   import { viewerPlugins } from "$lib/plugins";
   import { setupCodeCopy } from "$lib/markdown/code-copy";
   import { setupImageLightboxTrigger } from "$lib/markdown/image-lightbox-trigger";
+  import { setupLinkPreviewTrigger } from "$lib/actions/link-preview";
   import { buildToc, scrollToAnchor } from "$lib/markdown/toc-dom";
   import { applyIntrinsicImageSize, hydrateLocalImages } from "$lib/markdown/local-images";
   import {
@@ -74,6 +75,7 @@
   let cleanupCodeCopy: (() => void) | null = null;
   // 画像ライトボックストリガーのクリーンアップ関数
   let cleanupImageLightbox: (() => void) | null = null;
+  let cleanupLinkPreview: (() => void) | null = null;
   let cleanupLocalImages: (() => void) | null = null;
   // ファイルを開いた後にスクロールするアンカー
   let pendingAnchor: string | null = null;
@@ -134,6 +136,8 @@
     cleanupCodeCopy = null;
     cleanupImageLightbox?.();
     cleanupImageLightbox = null;
+    cleanupLinkPreview?.();
+    cleanupLinkPreview = null;
     cleanupLocalImages?.();
     cleanupLocalImages = null;
   }
@@ -333,6 +337,15 @@
         return [];
       }
     });
+
+    cleanupLinkPreview?.();
+    cleanupLinkPreview =
+      tab?.document && tab.source
+        ? setupLinkPreviewTrigger(contentEl, {
+            current: tab.document,
+            sourceGeneration: tab.source.generation ?? 0,
+          })
+        : null;
 
     cleanupCodeCopy?.();
     cleanupCodeCopy = setupCodeCopy(contentEl, {

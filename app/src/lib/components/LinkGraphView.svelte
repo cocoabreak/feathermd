@@ -4,6 +4,7 @@
   import { buildLinkGraph, type LinkGraphNode } from "$lib/link-graph";
   import type { LinkContextSection } from "$lib/stores/links.svelte";
   import type { DocumentRef } from "$lib/types";
+  import type { LinkPreviewRect } from "$lib/stores/link-preview.svelte";
   import { i18n } from "$lib/i18n/index.svelte";
 
   let {
@@ -12,12 +13,20 @@
     incoming,
     broken,
     onopen,
+    onpreview,
+    onpreviewleave,
   }: {
     current: DocumentRef;
     outgoing: LinkContextSection;
     incoming: LinkContextSection;
     broken: LinkContextSection;
     onopen: (node: LinkGraphNode) => void;
+    onpreview: (
+      node: LinkGraphNode,
+      getRect: () => LinkPreviewRect | null,
+      immediate: boolean
+    ) => void;
+    onpreviewleave: () => void;
   } = $props();
 
   const m = $derived(i18n.m);
@@ -26,6 +35,7 @@
   let graphContainer: HTMLDivElement;
   let graphView = $state<Core | null>(null);
   let keyboardNodeId = $state<string | null>(null);
+  let pointerNodeId: string | null = null;
   const keyboardNode = $derived(keyboardNodeId ? nodesById.get(keyboardNodeId) : undefined);
 
   function open(node: LinkGraphNode) {
@@ -144,8 +154,31 @@
     };
   }
 
-  function selectGraphNode(nodeId: string) {
+  function nodeRect(nodeId: string): LinkPreviewRect | null {
+    const view = graphView;
+    if (!view) return null;
+    const element = view.getElementById(nodeId);
+    if (!element || element.empty()) return null;
+    const bounds = element.renderedBoundingBox();
+    const container = graphContainer.getBoundingClientRect();
+    return {
+      top: container.top + bounds.y1,
+      right: container.left + bounds.x2,
+      bottom: container.top + bounds.y2,
+      left: container.left + bounds.x1,
+      width: bounds.w,
+      height: bounds.h,
+    };
+  }
+
+  function previewNode(nodeId: string, immediate: boolean) {
+    const node = nodesById.get(nodeId);
+    if (node) onpreview(node, () => nodeRect(nodeId), immediate);
+  }
+
+  function selectGraphNode(nodeId: string, preview = false) {
     keyboardNodeId = nodeId;
+    if (preview) previewNode(nodeId, true);
   }
 
   function applyGraphSelection(view: Core, nodeId: string | null) {
@@ -179,7 +212,7 @@
     }
 
     event.preventDefault();
-    selectGraphNode(nodeIds[nextIndex]);
+    selectGraphNode(nodeIds[nextIndex], true);
   }
 
   $effect(() => {
@@ -198,6 +231,11 @@
       applyGraphSelection(view, selectedId);
     } else if (selectedId) {
       keyboardNodeId = null;
+      onpreviewleave();
+    }
+    if (pointerNodeId && !nodesById.has(pointerNodeId)) {
+      pointerNodeId = null;
+      onpreviewleave();
     }
   });
 
@@ -223,6 +261,16 @@
       const node = nodesById.get(event.target.id());
       if (node) open(node);
     });
+    graphView.on("mouseover", "node", (event) => {
+      const nodeId = event.target.id();
+      pointerNodeId = nodeId;
+      const node = nodesById.get(nodeId);
+      if (node) onpreview(node, () => nodeRect(nodeId), false);
+    });
+    graphView.on("mouseout", "node", () => {
+      pointerNodeId = null;
+      onpreviewleave();
+    });
     const themeObserver = new MutationObserver(() => {
       graphView?.style(cytoscapeStyles());
     });
@@ -233,6 +281,8 @@
 
     return () => {
       themeObserver.disconnect();
+      pointerNodeId = null;
+      onpreviewleave();
       graphView?.destroy();
       graphView = null;
     };
@@ -264,7 +314,7 @@
     aria-describedby="link-graph-keyboard-help link-graph-selected-node"
     tabindex="0"
     onfocus={() => {
-      if (!keyboardNodeId && graph.nodes[0]) selectGraphNode(graph.nodes[0].id);
+      if (!keyboardNodeId && graph.nodes[0]) selectGraphNode(graph.nodes[0].id, true);
     }}
     onkeydown={handleGraphKeydown}
   ></div>

@@ -8,6 +8,7 @@
   "permissions": [
     "allow-get-link-graph-data",
     "allow-get-link-graph-window-context",
+    "allow-read-source-link-preview",
     "allow-request-link-graph-document-open"
   ]
 }

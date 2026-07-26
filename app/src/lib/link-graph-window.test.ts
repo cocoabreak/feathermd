@@ -10,6 +10,7 @@ const snapshot: LinkGraphWindowSnapshot = {
   contextVersion: 4,
   context: {
     document: { sourceId: "source-1", path: "current.md" },
+    sourceGeneration: 0,
     revision: 2,
     showHiddenFiles: false,
     respectGitignore: true,

@@ -7,6 +7,7 @@ export const LINK_GRAPH_OPEN_DOCUMENT_EVENT = "link-graph-open-document";
 
 export interface LinkGraphWindowContext {
   document: DocumentRef;
+  sourceGeneration: number;
   revision: number;
   showHiddenFiles: boolean;
   respectGitignore: boolean;

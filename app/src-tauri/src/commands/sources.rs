@@ -13,9 +13,10 @@ use std::io::{Read, Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::State;
+use tauri::{State, WebviewWindow};
 
 use super::search::{SearchMatch, SearchState};
+use super::window::{LinkGraphWindowState, LINK_GRAPH_WINDOW_LABEL, MAIN_WINDOW_LABEL};
 
 #[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq, Hash)]
 #[serde(rename_all = "camelCase")]
@@ -88,6 +89,7 @@ const MAX_LINK_STRINGS_PER_DOCUMENT: usize = 256 * 1024;
 const MAX_LINK_INDEX_STRINGS: usize = 8 * 1024 * 1024;
 const MAX_LINK_CONTEXT_ITEMS: usize = 500;
 const MAX_LINK_CONTEXT_BYTES: usize = 1024 * 1024;
+const MAX_LINK_PREVIEW_BYTES: u64 = 256 * 1024;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ZipEntryKind {
@@ -188,6 +190,24 @@ pub struct LinkContextResponse {
     incoming: LinkContextSection,
     broken: LinkContextSection,
     truncated: bool,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(tag = "status", rename_all = "camelCase")]
+pub enum LinkPreviewReadResponse {
+    Ready {
+        #[serde(rename = "rawPrefix")]
+        raw_prefix: String,
+        #[serde(rename = "byteSize")]
+        byte_size: u64,
+        truncated: bool,
+        #[serde(rename = "sourceGeneration")]
+        source_generation: u64,
+    },
+    Missing {
+        #[serde(rename = "sourceGeneration")]
+        source_generation: u64,
+    },
 }
 
 impl LinkContextResponse {
@@ -1223,6 +1243,202 @@ pub fn list_source_entries(
             }
             Ok(list_zip_entries(source, &document))
         }
+    }
+}
+
+fn decode_link_preview_prefix(
+    mut bytes: Vec<u8>,
+    byte_size: u64,
+) -> Result<(String, bool), String> {
+    let mut truncated =
+        byte_size > MAX_LINK_PREVIEW_BYTES || bytes.len() as u64 > MAX_LINK_PREVIEW_BYTES;
+    bytes.truncate(MAX_LINK_PREVIEW_BYTES as usize);
+    match std::str::from_utf8(&bytes) {
+        Ok(raw) => Ok((raw.to_string(), truncated)),
+        Err(error) if error.error_len().is_none() => {
+            bytes.truncate(error.valid_up_to());
+            truncated = true;
+            String::from_utf8(bytes)
+                .map(|raw| (raw, truncated))
+                .map_err(|_| "MarkdownプレビューをUTF-8として読み取れません".to_string())
+        }
+        Err(_) => Err("MarkdownプレビューをUTF-8として読み取れません".to_string()),
+    }
+}
+
+fn read_native_link_preview(
+    source: &NativeSource,
+    target: &DocumentRef,
+    roots: &AllowedRoots,
+    source_generation: u64,
+) -> Result<LinkPreviewReadResponse, String> {
+    let relative = normalize_virtual_path(&target.path)?;
+    if !is_markdown_virtual_path(&relative) {
+        return Err("Markdownファイル（.md / .markdown）のみプレビューできます".to_string());
+    }
+    let candidate = source.root.join(&relative);
+    match std::fs::symlink_metadata(&candidate) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            return Ok(LinkPreviewReadResponse::Missing { source_generation });
+        }
+        Err(error) => return Err(format!("プレビュー対象を確認できませんでした: {error}")),
+    }
+    let (file, canonical) = crate::commands::file::trusted_paths::open_allowed_file(
+        roots,
+        &candidate.to_string_lossy(),
+    )?;
+    if !canonical.starts_with(&source.root) {
+        return Err("ソースのルート外はプレビューできません".to_string());
+    }
+    if !crate::commands::has_markdown_extension(&canonical) {
+        return Err("Markdownファイル（.md / .markdown）のみプレビューできます".to_string());
+    }
+    let byte_size = file.metadata().map_err(|error| error.to_string())?.len();
+    let mut bytes = Vec::with_capacity(MAX_LINK_PREVIEW_BYTES as usize + 1);
+    file.take(MAX_LINK_PREVIEW_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("Markdownプレビューを読み取れませんでした: {error}"))?;
+    if byte_size <= MAX_LINK_PREVIEW_BYTES && bytes.len() as u64 != byte_size {
+        return Err("プレビュー対象が読み込み中に変更されました".to_string());
+    }
+    let (raw_prefix, truncated) = decode_link_preview_prefix(bytes, byte_size)?;
+    Ok(LinkPreviewReadResponse::Ready {
+        raw_prefix,
+        byte_size,
+        truncated,
+        source_generation,
+    })
+}
+
+fn read_zip_link_preview(
+    source: &ZipSource,
+    target: &DocumentRef,
+    source_generation: u64,
+) -> Result<LinkPreviewReadResponse, String> {
+    let path = normalize_virtual_path(&target.path)?;
+    if !is_markdown_virtual_path(&path) {
+        return Err("Markdownファイル（.md / .markdown）のみプレビューできます".to_string());
+    }
+    let Some(indexed) = source
+        .entries
+        .get(&path)
+        .filter(|entry| entry.kind == ZipEntryKind::File)
+    else {
+        return Ok(LinkPreviewReadResponse::Missing { source_generation });
+    };
+    if indexed.uncompressed_size > 0
+        && (indexed.compressed_size == 0
+            || indexed.uncompressed_size / indexed.compressed_size.max(1) > MAX_COMPRESSION_RATIO)
+    {
+        return Err("ZIP内のプレビュー対象がサイズ上限を超えています".to_string());
+    }
+    let mut archive = source
+        .archive
+        .lock()
+        .map_err(|_| "ZIPアーカイブのロックに失敗しました".to_string())?;
+    let file = archive
+        .by_index(indexed.archive_index)
+        .map_err(|error| format!("ZIPエントリを読み取れませんでした: {error}"))?;
+    if file.encrypted()
+        || file.is_symlink()
+        || file.compression() != indexed.compression
+        || file.compressed_size() != indexed.compressed_size
+        || file.size() != indexed.uncompressed_size
+        || !matches!(
+            file.compression(),
+            zip::CompressionMethod::Stored
+                | zip::CompressionMethod::Deflated
+                | zip::CompressionMethod::Deflate64
+        )
+    {
+        return Err("ZIPエントリの安全性が登録時から変化しました".to_string());
+    }
+    let actual_path = file
+        .enclosed_name()
+        .ok_or_else(|| "ZIP内に安全でないパスがあります".to_string())?
+        .to_string_lossy()
+        .replace('\\', "/");
+    if normalize_virtual_path(actual_path.trim_end_matches('/'))? != path {
+        return Err("ZIPエントリが登録時から変更されました".to_string());
+    }
+    let byte_size = indexed.uncompressed_size;
+    let mut bytes = Vec::with_capacity(MAX_LINK_PREVIEW_BYTES as usize + 1);
+    file.take(MAX_LINK_PREVIEW_BYTES + 1)
+        .read_to_end(&mut bytes)
+        .map_err(|error| format!("ZIPプレビューを展開できませんでした: {error}"))?;
+    if byte_size <= MAX_LINK_PREVIEW_BYTES && bytes.len() as u64 != byte_size {
+        return Err("ZIPエントリの実際の展開サイズが宣言値と一致しません".to_string());
+    }
+    let (raw_prefix, truncated) = decode_link_preview_prefix(bytes, byte_size)?;
+    Ok(LinkPreviewReadResponse::Ready {
+        raw_prefix,
+        byte_size,
+        truncated,
+        source_generation,
+    })
+}
+
+fn validate_preview_origin(
+    backend: &SourceBackend,
+    current: &DocumentRef,
+    roots: &AllowedRoots,
+) -> Result<(), String> {
+    match backend {
+        SourceBackend::Native(source) => {
+            let path = resolve_native_path(source, &current.path, roots)?;
+            if !crate::commands::has_markdown_extension(&path) {
+                return Err("現在文書がMarkdownではありません".to_string());
+            }
+        }
+        SourceBackend::Zip(source) => {
+            let path = normalize_virtual_path(&current.path)?;
+            if !is_markdown_virtual_path(&path)
+                || !source
+                    .entries
+                    .get(&path)
+                    .is_some_and(|entry| entry.kind == ZipEntryKind::File)
+            {
+                return Err("現在文書がソース内に見つかりません".to_string());
+            }
+        }
+    }
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn read_source_link_preview(
+    current: DocumentRef,
+    target: DocumentRef,
+    window: WebviewWindow,
+    graph_state: State<'_, LinkGraphWindowState>,
+    roots: State<'_, AllowedRoots>,
+    registry: State<'_, SourceRegistry>,
+) -> Result<LinkPreviewReadResponse, String> {
+    match window.label() {
+        MAIN_WINDOW_LABEL => {}
+        LINK_GRAPH_WINDOW_LABEL if graph_state.allows_preview(&current, &target)? => {}
+        LINK_GRAPH_WINDOW_LABEL => {
+            return Err("現在のリンクグラフにない文書はプレビューできません".to_string());
+        }
+        _ => return Err("このウィンドウからは実行できません".to_string()),
+    }
+    ensure_same_preview_source(&current, &target)?;
+    let (backend, source_generation) = registry.get_with_generation(&current.source_id)?;
+    validate_preview_origin(backend.as_ref(), &current, &roots)?;
+    match backend.as_ref() {
+        SourceBackend::Native(source) => {
+            read_native_link_preview(source, &target, &roots, source_generation)
+        }
+        SourceBackend::Zip(source) => read_zip_link_preview(source, &target, source_generation),
+    }
+}
+
+fn ensure_same_preview_source(current: &DocumentRef, target: &DocumentRef) -> Result<(), String> {
+    if current.source_id == target.source_id {
+        Ok(())
+    } else {
+        Err("別のドキュメントソースはプレビューできません".to_string())
     }
 }
 
@@ -2419,6 +2635,152 @@ mod tests {
         let (after_oversized, truncated) = extract_wiki_targets(&oversized, 10);
         assert_eq!(after_oversized, vec!["Valid"]);
         assert!(truncated);
+    }
+
+    #[test]
+    fn native_link_preview_distinguishes_ready_missing_and_source_mismatch() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::write(directory.path().join("current.md"), "# Current").unwrap();
+        std::fs::write(
+            directory.path().join("target.md"),
+            "---\ntitle: Target\n---\n# Target\nPreview body",
+        )
+        .unwrap();
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let source = NativeSource {
+            root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
+        };
+        let current = DocumentRef {
+            source_id: "source-a".to_string(),
+            path: "current.md".to_string(),
+        };
+        let target = DocumentRef {
+            source_id: "source-a".to_string(),
+            path: "target.md".to_string(),
+        };
+
+        let ready = read_native_link_preview(&source, &target, &roots, 7).unwrap();
+        assert!(matches!(
+            ready,
+            LinkPreviewReadResponse::Ready {
+                raw_prefix,
+                source_generation: 7,
+                truncated: false,
+                ..
+            } if raw_prefix.contains("Preview body")
+        ));
+
+        let missing = read_native_link_preview(
+            &source,
+            &DocumentRef {
+                path: "missing.md".to_string(),
+                ..target.clone()
+            },
+            &roots,
+            7,
+        )
+        .unwrap();
+        assert_eq!(
+            missing,
+            LinkPreviewReadResponse::Missing {
+                source_generation: 7
+            }
+        );
+        assert!(ensure_same_preview_source(
+            &current,
+            &DocumentRef {
+                source_id: "source-b".to_string(),
+                path: "target.md".to_string(),
+            }
+        )
+        .is_err());
+    }
+
+    #[test]
+    fn link_preview_prefix_truncates_only_incomplete_utf8_tail() {
+        let mut bytes = vec![b'a'; MAX_LINK_PREVIEW_BYTES as usize - 1];
+        bytes.extend_from_slice(&"あ".as_bytes()[..2]);
+
+        let (raw, truncated) =
+            decode_link_preview_prefix(bytes, MAX_LINK_PREVIEW_BYTES + 1).unwrap();
+
+        assert!(truncated);
+        assert_eq!(raw.len(), MAX_LINK_PREVIEW_BYTES as usize - 1);
+        assert!(decode_link_preview_prefix(vec![0xff], 1).is_err());
+    }
+
+    #[test]
+    fn link_preview_response_uses_frontend_camel_case_contract() {
+        let ready = serde_json::to_value(LinkPreviewReadResponse::Ready {
+            raw_prefix: "# Preview".to_string(),
+            byte_size: 9,
+            truncated: false,
+            source_generation: 4,
+        })
+        .unwrap();
+        assert_eq!(ready["status"], "ready");
+        assert_eq!(ready["rawPrefix"], "# Preview");
+        assert_eq!(ready["byteSize"], 9);
+        assert_eq!(ready["sourceGeneration"], 4);
+        assert!(ready.get("raw_prefix").is_none());
+        assert!(ready.get("source_generation").is_none());
+
+        let missing = serde_json::to_value(LinkPreviewReadResponse::Missing {
+            source_generation: 4,
+        })
+        .unwrap();
+        assert_eq!(missing["status"], "missing");
+        assert_eq!(missing["sourceGeneration"], 4);
+    }
+
+    #[test]
+    fn zip_link_preview_reads_prefix_and_reports_missing() {
+        let directory = tempfile::tempdir().unwrap();
+        let archive_path = directory.path().join("preview.zip");
+        create_zip(
+            &archive_path,
+            &[
+                ("current.md", b"# Current"),
+                ("target.md", b"# Target\nZIP preview"),
+            ],
+        );
+        let roots = AllowedRoots::new();
+        roots
+            .register_zip_file(&archive_path.to_string_lossy())
+            .unwrap();
+        let source = build_zip_source(
+            roots.resolve(&archive_path.to_string_lossy()).unwrap(),
+            &roots,
+        )
+        .unwrap();
+        let target = DocumentRef {
+            source_id: "zip".to_string(),
+            path: "target.md".to_string(),
+        };
+
+        assert!(matches!(
+            read_zip_link_preview(&source, &target, 3).unwrap(),
+            LinkPreviewReadResponse::Ready {
+                raw_prefix,
+                source_generation: 3,
+                ..
+            } if raw_prefix.contains("ZIP preview")
+        ));
+        assert_eq!(
+            read_zip_link_preview(
+                &source,
+                &DocumentRef {
+                    path: "missing.md".to_string(),
+                    ..target
+                },
+                3
+            )
+            .unwrap(),
+            LinkPreviewReadResponse::Missing {
+                source_generation: 3
+            }
+        );
     }
 
     #[test]
