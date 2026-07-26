@@ -2,6 +2,25 @@
 
 All notable changes to FeatherMD are documented in this file.
 
+## [0.2.3] - 2026-07-27
+
+### Added
+
+- Added a link inspector for the current document, including incoming links, outgoing Markdown and Wiki links, and broken-link status.
+- Added a detachable local link graph that visualizes Markdown links, Wiki links, and missing targets.
+- Added bounded hover and keyboard-focus previews for resolved local Markdown and Wiki links in both documents and the local link graph.
+- Added application screenshots and an animated link-preview demonstration to the English and Japanese READMEs.
+
+### Changed
+
+- Updated npm dependencies to resolve known development-tooling vulnerabilities.
+- Added GitHub issue templates and documented the repository's issue workflow.
+
+### Fixed
+
+- Fixed multiline Mermaid node labels so line breaks render correctly without weakening sanitization.
+- Aligned document navigation, link inspection, graph traversal, and previews on the shared secure link-resolution contract while excluding absolute paths from passive previews.
+
 ## [0.2.2] - 2026-07-20
 
 The first public release of FeatherMD.
@@ -47,4 +66,5 @@ The first public release of FeatherMD.
 - External images are not loaded silently under the default ask policy, and large documents do not execute rich Markdown rendering in safe mode.
 - Startup update checks contact GitHub Releases by default but do not send document contents or local file paths and can be disabled in Settings.
 
+[0.2.3]: https://github.com/cocoabreak/feathermd/releases/tag/v0.2.3
 [0.2.2]: https://github.com/cocoabreak/feathermd/releases/tag/v0.2.2
