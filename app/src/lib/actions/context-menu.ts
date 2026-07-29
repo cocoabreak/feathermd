@@ -1,11 +1,18 @@
 import { i18n } from "$lib/i18n/index.svelte";
-import type { RenderMode, ViewMode } from "$lib/types";
+import type { DocumentRef, DocumentSourceInfo, RenderMode, TocHeading, ViewMode } from "$lib/types";
+import { createReferenceSubmenu } from "$lib/actions/reference-menu";
 
 interface ViewerContextMenuParams {
   event: MouseEvent;
   /** 右クリック位置の探索上限となるコンテンツルート要素 */
   contentEl: HTMLElement;
-  activeTab: { nativePath?: string | null; canOpenExternalEditor: boolean; title: string };
+  activeTab: {
+    nativePath?: string | null;
+    canOpenExternalEditor: boolean;
+    title: string;
+    document?: DocumentRef;
+    source?: DocumentSourceInfo;
+  };
   /** HTMLエクスポート用の描画済みHTML */
   renderedHtml: string;
   renderMode: RenderMode;
@@ -28,6 +35,23 @@ function findTargetSvg(event: MouseEvent, contentEl: HTMLElement): SVGSVGElement
   return null;
 }
 
+export function findTargetHeading(
+  event: MouseEvent,
+  contentEl: HTMLElement,
+  enabled = true
+): TocHeading | null {
+  if (!enabled) return null;
+  const target = event.target;
+  if (!(target instanceof Element)) return null;
+  const heading = target.closest<HTMLElement>("h1,h2,h3,h4,h5,h6");
+  if (!heading || !contentEl.contains(heading) || !heading.id) return null;
+  return {
+    level: Number.parseInt(heading.tagName.slice(1), 10),
+    text: heading.textContent?.trim() ?? "",
+    id: heading.id,
+  };
+}
+
 /**
  * ビューア上の右クリックメニューを構築して表示する。
  * 通常表示のSVG上ではPNG/SVG保存を追加し、HTML保存も提供する。セーフモードでは
@@ -47,12 +71,26 @@ export async function showViewerContextMenu(params: ViewerContextMenuParams): Pr
       await import("$lib/actions/export-actions");
 
     const items: (
-      Awaited<ReturnType<typeof MenuItem.new>> | Awaited<ReturnType<typeof PredefinedMenuItem.new>>
+      | Awaited<ReturnType<typeof MenuItem.new>>
+      | Awaited<ReturnType<typeof PredefinedMenuItem.new>>
+      | Awaited<ReturnType<typeof createReferenceSubmenu>>
     )[] = [
       await PredefinedMenuItem.new({ item: "Copy", text: m.contextMenu.copy }),
       await PredefinedMenuItem.new({ item: "SelectAll", text: m.contextMenu.selectAll }),
       await PredefinedMenuItem.new({ item: "Separator" }),
     ];
+
+    if (activeTab.document && activeTab.source) {
+      items.push(
+        await createReferenceSubmenu({
+          document: activeTab.document,
+          source: activeTab.source,
+          title: activeTab.title,
+          heading: findTargetHeading(event, contentEl, hasRenderedContent),
+        }),
+        await PredefinedMenuItem.new({ item: "Separator" })
+      );
+    }
 
     if (hasRenderedContent && targetSvg) {
       items.push(

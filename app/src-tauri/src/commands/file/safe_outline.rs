@@ -8,6 +8,7 @@ const MAX_SAFE_OUTLINE_HEADINGS: usize = 2_000;
 pub struct SafeOutlineHeading {
     pub level: u8,
     pub text: String,
+    pub anchor_text: String,
     pub id: String,
     pub utf16_offset: usize,
 }
@@ -20,6 +21,7 @@ pub struct SafeOutline {
 struct PendingHeading {
     level: u8,
     text: String,
+    anchor_text: String,
     byte_offset: usize,
 }
 
@@ -44,38 +46,53 @@ fn parser_options() -> Options {
 pub fn extract_safe_outline(source: &str) -> SafeOutline {
     let mut pending = Vec::new();
     let mut current: Option<PendingHeading> = None;
+    let mut image_depth = 0usize;
     let mut truncated = false;
 
     for (event, range) in Parser::new_ext(source, parser_options()).into_offset_iter() {
         match event {
             Event::Start(Tag::Heading { level, .. }) => {
+                image_depth = 0;
                 current = Some(PendingHeading {
                     level: heading_level(level),
                     text: String::new(),
+                    anchor_text: String::new(),
                     byte_offset: range.start,
                 });
+            }
+            Event::Start(Tag::Image { .. }) if current.is_some() => {
+                image_depth += 1;
+            }
+            Event::End(TagEnd::Image) if current.is_some() => {
+                image_depth = image_depth.saturating_sub(1);
             }
             Event::End(TagEnd::Heading(_)) => {
                 if let Some(mut heading) = current.take() {
                     heading.text = heading.text.trim().to_string();
-                    if !heading.text.is_empty() {
-                        if pending.len() >= MAX_SAFE_OUTLINE_HEADINGS {
-                            truncated = true;
-                            break;
-                        }
-                        pending.push(heading);
+                    heading.anchor_text = heading.anchor_text.trim().to_string();
+                    if pending.len() >= MAX_SAFE_OUTLINE_HEADINGS {
+                        truncated = true;
+                        break;
                     }
+                    pending.push(heading);
                 }
             }
-            Event::Text(text) | Event::Code(text) if current.is_some() => {
-                current
-                    .as_mut()
-                    .expect("checked above")
-                    .text
-                    .push_str(&text);
+            Event::Text(text) if current.is_some() && image_depth == 0 => {
+                let heading = current.as_mut().expect("checked above");
+                heading.text.push_str(&text);
+                heading.anchor_text.push_str(&text);
+            }
+            Event::Code(text) if current.is_some() && image_depth == 0 => {
+                let heading = current.as_mut().expect("checked above");
+                heading.text.push_str(&text);
+                heading.anchor_text.extend(text.chars().filter(|character| {
+                    character.is_alphanumeric() || character.is_whitespace() || *character == '-'
+                }));
             }
             Event::SoftBreak | Event::HardBreak if current.is_some() => {
-                current.as_mut().expect("checked above").text.push(' ');
+                let heading = current.as_mut().expect("checked above");
+                heading.text.push(' ');
+                heading.anchor_text.push(' ');
             }
             _ => {}
         }
@@ -94,6 +111,7 @@ pub fn extract_safe_outline(source: &str) -> SafeOutline {
             SafeOutlineHeading {
                 level: heading.level,
                 text: heading.text,
+                anchor_text: heading.anchor_text,
                 id: format!("safe-heading-{}", index),
                 utf16_offset,
             }
@@ -121,6 +139,38 @@ mod tests {
             vec![(1, "One em"), (1, "Two"), (3, "code")]
         );
         assert!(!outline.truncated);
+    }
+
+    #[test]
+    fn matches_rendered_text_for_images_and_keeps_empty_headings_for_anchor_order() {
+        let outline = extract_safe_outline("# Hello ![alt](image.png)\n\n#\n\n## !!!\n");
+        assert_eq!(
+            outline
+                .headings
+                .iter()
+                .map(|heading| heading.text.as_str())
+                .collect::<Vec<_>>(),
+            vec!["Hello", "", "!!!"]
+        );
+    }
+
+    #[test]
+    fn preserves_inline_code_structure_for_frontend_anchor_generation() {
+        let outline =
+            extract_safe_outline("# Win :trophy:\n\n## Code `:trophy:`\n\n### Literal `:D`\n");
+        assert_eq!(outline.headings[0].anchor_text, "Win :trophy:");
+        assert_eq!(outline.headings[1].text, "Code :trophy:");
+        assert_eq!(outline.headings[1].anchor_text, "Code trophy");
+        assert_eq!(outline.headings[2].text, "Literal :D");
+        assert_eq!(outline.headings[2].anchor_text, "Literal D");
+    }
+
+    #[test]
+    fn aligns_math_and_footnote_anchor_text_with_rendered_headings() {
+        let outline = extract_safe_outline("# Value $x$\n\n## Heading[^n]\n\n[^n]: Note\n");
+        assert_eq!(outline.headings[0].anchor_text, "Value $x$");
+        assert_eq!(outline.headings[1].text, "Heading");
+        assert_eq!(outline.headings[1].anchor_text, "Heading");
     }
 
     #[test]

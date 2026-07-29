@@ -1,7 +1,14 @@
 import MarkdownIt from "markdown-it";
+import footnote from "markdown-it-footnote";
 import type Token from "markdown-it/lib/token.mjs";
 import { extractFrontmatter } from "$lib/markdown/frontmatter";
 import { basename } from "$lib/utils";
+import {
+  decodeHeadingAnchor,
+  headingBaseId,
+  headingInlineCodeText,
+  uniqueHeadingId,
+} from "$lib/markdown/heading-anchor";
 
 const MAX_TEXT_CHARS = 256;
 const MAX_METADATA_ITEMS = 32;
@@ -28,6 +35,7 @@ interface RawPreviewMetadata {
 }
 
 const parser = new MarkdownIt({ html: false, linkify: false, typographer: false });
+parser.use(footnote);
 
 function truncateCodePoints(value: string, limit: number): [string, boolean] {
   const points = Array.from(value);
@@ -97,31 +105,19 @@ function boundedMetadata(data: Record<string, unknown> | null): RawPreviewMetada
   };
 }
 
-function inlineText(token: Token): string {
+function inlineText(token: Token, includeInlineCode = false, normalizeHeadingCode = false): string {
   return (token.children ?? [])
     .flatMap((child) => {
       if (child.type === "text") return [child.content];
+      if (includeInlineCode && child.type === "code_inline") {
+        return [normalizeHeadingCode ? headingInlineCodeText(child.content) : child.content];
+      }
       if (child.type === "softbreak" || child.type === "hardbreak") return [" "];
       return [];
     })
     .join("")
     .replace(/\s+/g, " ")
     .trim();
-}
-
-function normalizeAnchor(value: string): string {
-  let decoded = value.replace(/^#/, "");
-  try {
-    decoded = decodeURIComponent(decoded);
-  } catch {
-    // 不正なpercent-encodingはそのまま比較し、例外でプレビュー全体を失敗させない。
-  }
-  return decoded
-    .normalize("NFKC")
-    .toLowerCase()
-    .replace(/[^\p{L}\p{N}\s-]/gu, "")
-    .trim()
-    .replace(/\s+/g, "-");
 }
 
 function extractExcerpt(
@@ -134,20 +130,24 @@ function extractExcerpt(
     .replace(/<!--[\s\S]*?-->/g, " ")
     .replace(/<\/?[A-Za-z][^>]*>/g, " ");
   const tokens = parser.parse(withoutHtml, {});
-  const wanted = anchor ? normalizeAnchor(anchor) : null;
+  const wanted = anchor ? decodeHeadingAnchor(anchor) : null;
   let heading: string | null = null;
   let collect = !wanted;
   const parts: string[] = [];
-  const headingCounts = new Map<string, number>();
+  const usedHeadingIds = new Set<string>();
+  let headingIndex = 0;
 
   for (let index = 0; index < tokens.length; index++) {
     const token = tokens[index];
     if (token.type === "heading_open") {
-      const headingText = tokens[index + 1]?.type === "inline" ? inlineText(tokens[index + 1]) : "";
-      const baseSlug = normalizeAnchor(headingText);
-      const occurrence = headingCounts.get(baseSlug) ?? 0;
-      headingCounts.set(baseSlug, occurrence + 1);
-      const slug = occurrence === 0 ? baseSlug : `${baseSlug}-${occurrence}`;
+      const inline = tokens[index + 1]?.type === "inline" ? tokens[index + 1] : null;
+      const headingText = inline ? inlineText(inline, true) : "";
+      const headingAnchorText = inline ? inlineText(inline, true, true) : "";
+      const slug = uniqueHeadingId(
+        headingBaseId(headingAnchorText, headingIndex++),
+        usedHeadingIds
+      );
+      usedHeadingIds.add(slug);
       if (wanted && slug === wanted) {
         heading = headingText;
         collect = true;

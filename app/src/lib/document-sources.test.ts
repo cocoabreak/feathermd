@@ -69,11 +69,26 @@ describe("document source paths", () => {
     expect(resolveDocumentTarget(zipSource, base, "C:/notes/README.md")).toBeNull();
   });
 
+  it("単一スラッシュをSourceルートとしてNativeとZIPで解決する", () => {
+    const nativeBase = { sourceId: "native-1", path: "guide/start.md" };
+    const zipBase = { sourceId: "zip-1", path: "guide/start.md" };
+    expect(resolveDocumentTarget(nativeSource, nativeBase, "/README.md")).toEqual({
+      sourceId: "native-1",
+      path: "README.md",
+    });
+    expect(resolveDocumentTarget(zipSource, zipBase, "/docs/read%20me.md")).toEqual({
+      sourceId: "zip-1",
+      path: "docs/read me.md",
+    });
+  });
+
   it.each([
     ["../README.md#Intro", "README.md", "Intro"],
     ["..\\README.markdown", "README.markdown", null],
     ["./details.md", "guide/details.md", null],
     ["missing.md", "guide/missing.md", null],
+    ["/README.md#Intro", "README.md", "Intro"],
+    ["/docs/read%20me.md", "docs/read me.md", null],
   ])(
     "Source相対Markdownリンク %s を受動処理用DocumentRefへ解決する",
     (target, expectedPath, expectedAnchor) => {
@@ -87,7 +102,6 @@ describe("document source paths", () => {
 
   it.each([
     "C:/notes/README.md",
-    "/notes/README.md",
     "//server/share/README.md",
     "\\\\server\\share\\README.md",
     "../../secret.md",
@@ -96,6 +110,8 @@ describe("document source paths", () => {
     "#Intro",
     "image.png",
     "bad\0name.md",
+    "/../../secret.md",
+    "/bad%encoding.md",
   ])("受動処理では絶対・Source外・非Markdownリンク %s を拒否する", (target) => {
     const base: DocumentRef = { sourceId: "native-1", path: "guide/start.md" };
     expect(resolveSourceRelativeMarkdownTarget(base, target)).toBeNull();

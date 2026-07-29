@@ -90,6 +90,9 @@ export const ja = {
     zoomIn: "表示を拡大",
     zoomOut: "表示を縮小",
     zoomReset: "表示倍率をリセット",
+    copyWikiReference: "現在の文書をWikiリンクとしてコピー",
+    copyMarkdownReference: "現在の文書をMarkdownリンクとしてコピー",
+    copyPathReference: "現在の文書パスをコピー",
   },
   contextMenu: {
     copy: "コピー",
@@ -99,6 +102,17 @@ export const ja = {
     saveAsHtml: "HTMLとして保存...",
     print: "印刷 / PDFとして保存...",
     openExternalEditor: "外部エディターで開く",
+  },
+  referenceCopy: {
+    menu: "参照をコピー",
+    wiki: "Wikiリンク",
+    markdown: "Markdownリンク（Sourceルート基準）",
+    path: "ファイルパス",
+    headingWiki: "見出し付きWikiリンク",
+    headingMarkdown: "見出し付きMarkdownリンク",
+    headingName: "見出し名",
+    copied: "参照をコピーしました",
+    failed: "参照をコピーできませんでした",
   },
   trust: {
     title: "フォルダーの信頼",

@@ -1,4 +1,17 @@
 import type { TocHeading } from "$lib/types";
+import { headingBaseId, uniqueHeadingId } from "$lib/markdown/heading-anchor";
+
+export function withReferenceHeadingIds(headings: TocHeading[]): TocHeading[] {
+  const usedIds = new Set<string>();
+  return headings.map((heading, index) => {
+    const referenceId = uniqueHeadingId(
+      headingBaseId(heading.anchorText ?? heading.text, index),
+      usedIds
+    );
+    usedIds.add(referenceId);
+    return { ...heading, referenceId };
+  });
+}
 
 function createTocStore() {
   let headings = $state<TocHeading[]>([]);
@@ -20,7 +33,7 @@ function createTocStore() {
       truncated = false;
     },
     setSafeOutline(h: TocHeading[], isTruncated: boolean) {
-      headings = h;
+      headings = withReferenceHeadingIds(h);
       truncated = isTruncated;
     },
     setActiveId(id: string | null) {

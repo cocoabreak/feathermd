@@ -6,9 +6,11 @@ describe("command registry", () => {
     let label = "最初の名前";
     registerCommand({ id: "test.visible", label: () => label, run: () => {} });
     registerCommand({ id: "test.internal", run: () => {} });
+    registerCommand({ id: "test.hidden", label: () => null, run: () => {} });
 
     expect(listPaletteCommands()).toContainEqual({ id: "test.visible", label: "最初の名前" });
     expect(listPaletteCommands().some((command) => command.id === "test.internal")).toBe(false);
+    expect(listPaletteCommands().some((command) => command.id === "test.hidden")).toBe(false);
 
     label = "変更後の名前";
     expect(listPaletteCommands()).toContainEqual({ id: "test.visible", label: "変更後の名前" });

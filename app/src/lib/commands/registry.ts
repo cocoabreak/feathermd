@@ -1,6 +1,6 @@
 export interface Command {
   id: string;
-  label?: () => string;
+  label?: () => string | null;
   run: () => void | Promise<void>;
 }
 
@@ -21,7 +21,8 @@ export function runCommand(id: string): void {
 
 /** 動的な翻訳ラベルを持つ、ユーザー向けコマンドだけを返す。 */
 export function listPaletteCommands(): PaletteCommand[] {
-  return [...commands.values()]
-    .filter((command): command is Command & { label: () => string } => Boolean(command.label))
-    .map((command) => ({ id: command.id, label: command.label() }));
+  return [...commands.values()].flatMap((command) => {
+    const label = command.label?.();
+    return label ? [{ id: command.id, label }] : [];
+  });
 }

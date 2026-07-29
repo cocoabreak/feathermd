@@ -109,6 +109,19 @@ export function resolveDocumentPath(base: DocumentRef, target: string): Document
   return { sourceId: base.sourceId, path: resolved.join("/") };
 }
 
+function decodeMarkdownPath(target: string): string | null {
+  try {
+    return decodeURIComponent(target);
+  } catch {
+    return null;
+  }
+}
+
+function resolveSourceRootPath(base: DocumentRef, target: string): DocumentRef | null {
+  if (!target.startsWith("/") || target.startsWith("//")) return null;
+  return resolveDocumentPath({ sourceId: base.sourceId, path: "" }, target.slice(1));
+}
+
 export interface SourceRelativeMarkdownTarget {
   document: DocumentRef;
   anchor: string | null;
@@ -126,13 +139,21 @@ export function resolveSourceRelativeMarkdownTarget(
   if (!trimmed || trimmed.includes("\0") || trimmed.includes("?")) return null;
 
   const hashIndex = trimmed.indexOf("#");
-  const target = (hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed).trim();
+  const encodedTarget = (hashIndex >= 0 ? trimmed.slice(0, hashIndex) : trimmed).trim();
+  const target = decodeMarkdownPath(encodedTarget);
   const rawAnchor = hashIndex >= 0 ? trimmed.slice(hashIndex + 1).trim() : "";
-  if (!target || !isMarkdownPath(target) || /^[A-Za-z][A-Za-z0-9+.-]*:/.test(target)) {
+  if (
+    !target ||
+    !isMarkdownPath(target) ||
+    /^[A-Za-z][A-Za-z0-9+.-]*:/.test(target) ||
+    target.startsWith("//")
+  ) {
     return null;
   }
 
-  const document = resolveDocumentPath(base, target);
+  const document = target.startsWith("/")
+    ? resolveSourceRootPath(base, target)
+    : resolveDocumentPath(base, target);
   return document ? { document, anchor: rawAnchor || null } : null;
 }
 
@@ -141,10 +162,15 @@ export function resolveDocumentTarget(
   base: DocumentRef,
   target: string
 ): DocumentRef | null {
-  const normalizedTarget = normalizePath(target);
+  const decodedTarget = decodeMarkdownPath(target);
+  if (decodedTarget === null) return null;
+  const normalizedTarget = normalizePath(decodedTarget);
+  if (normalizedTarget.startsWith("/") && !normalizedTarget.startsWith("//")) {
+    return resolveSourceRootPath(base, normalizedTarget);
+  }
   if (
     source.kind === "native" &&
-    (/^[A-Za-z]:\//.test(normalizedTarget) || normalizedTarget.startsWith("/"))
+    (/^[A-Za-z]:\//.test(normalizedTarget) || normalizedTarget.startsWith("//"))
   ) {
     const root = normalizePath(source.nativePath).replace(/\/$/, "");
     const comparableTarget = nativeComparisonPath(normalizedTarget);
