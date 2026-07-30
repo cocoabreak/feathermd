@@ -2,6 +2,9 @@
   import { tocStore } from "$lib/stores/toc.svelte";
   import { frontmatterStore } from "$lib/stores/frontmatter.svelte";
   import { i18n } from "$lib/i18n/index.svelte";
+  import { tabStore } from "$lib/stores/tab.svelte";
+  import { showHeadingReferenceMenu } from "$lib/actions/reference-menu";
+  import type { TocHeading } from "$lib/types";
 
   let { onselect }: { onselect?: () => void } = $props();
 
@@ -19,6 +22,17 @@
     document.getElementById(id)?.scrollIntoView({ behavior: "smooth" });
     tocStore.setActiveId(id);
     onselect?.();
+  }
+
+  function showReferenceMenu(event: MouseEvent, heading: TocHeading): void {
+    const tab = tabStore.tabs.find((candidate) => candidate.id === tabStore.activeTabId);
+    if (!tab?.document || !tab.source) return;
+    void showHeadingReferenceMenu(event, {
+      document: tab.document,
+      source: tab.source,
+      title: tab.title,
+      heading: { ...heading, id: heading.referenceId ?? heading.id },
+    });
   }
 </script>
 
@@ -59,6 +73,7 @@
         class:text-muted-foreground={heading.id !== tocStore.activeId}
         style="padding-left: {(heading.level - 1) * 10 + 8}px; padding-right: 8px"
         onclick={() => scrollTo(heading.id)}
+        oncontextmenu={(event) => showReferenceMenu(event, heading)}
       >
         {heading.text}
       </button>

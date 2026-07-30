@@ -58,4 +58,8 @@ export interface TocHeading {
   level: number;
   text: string;
   id: string;
+  /** レンダラー変換前の構造を保ったアンカー計算用テキスト。safe/source outlineだけが設定する。 */
+  anchorText?: string;
+  /** 通常レンダー時の参照用アンカー。safe/source表示のスクロールIDと異なる場合だけ設定する。 */
+  referenceId?: string;
 }

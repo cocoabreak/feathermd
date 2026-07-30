@@ -1,4 +1,26 @@
 import type { TocHeading } from "$lib/types";
+import {
+  decodeHeadingAnchor,
+  headingBaseId,
+  headingInlineCodeText,
+  headingSlug,
+  uniqueHeadingId,
+} from "$lib/markdown/heading-anchor";
+
+function headingAnchorText(element: Element): string {
+  const clone = element.cloneNode(true) as Element;
+  for (const footnote of clone.querySelectorAll(".footnote-ref")) {
+    footnote.remove();
+  }
+  for (const katex of clone.querySelectorAll(".katex")) {
+    const tex = katex.querySelector('annotation[encoding="application/x-tex"]')?.textContent ?? "";
+    katex.replaceWith(document.createTextNode(tex));
+  }
+  for (const code of clone.querySelectorAll("code")) {
+    code.textContent = headingInlineCodeText(code.textContent ?? "");
+  }
+  return clone.textContent?.trim() ?? "";
+}
 
 /**
  * レンダリング済みコンテナ内の見出し（h1..h6）にIDを付与し、TOC用のヘディング一覧を返す。
@@ -14,27 +36,9 @@ export function buildToc(container: HTMLElement): TocHeading[] {
     const text = el.textContent?.trim() ?? "";
 
     if (!el.id) {
-      const base =
-        text
-          .toLowerCase()
-          .replace(/[^\w\s-]/g, "") // 非ASCII・記号を除去
-          .replace(/\s+/g, "-") // 空白をハイフンに
-          .replace(/^-+|-+$/g, "") // 先頭・末尾のハイフンを除去（---live-editor対策）
-          .slice(0, 60) || `heading-${i}`;
-
-      // 重複IDにはサフィックスを付与
-      let id = base;
-      let n = 1;
-      while (usedIds.has(id)) {
-        id = `${base}-${n++}`;
-      }
-      el.id = id;
+      el.id = uniqueHeadingId(headingBaseId(headingAnchorText(el), i), usedIds);
     } else if (usedIds.has(el.id)) {
-      // 既存IDも重複チェック
-      const base = el.id;
-      let n = 1;
-      while (usedIds.has(`${base}-${n}`)) n++;
-      el.id = `${base}-${n}`;
+      el.id = uniqueHeadingId(el.id, usedIds);
     }
 
     usedIds.add(el.id);
@@ -47,9 +51,10 @@ export function buildToc(container: HTMLElement): TocHeading[] {
  * ID生成アルゴリズムの違い（GitHub / VitePress など）を吸収するためフォールバックを持つ。
  */
 export function scrollToAnchor(contentEl: HTMLElement, hash: string): void {
+  const decodedHash = decodeHeadingAnchor(hash);
   // 1. 完全一致
   try {
-    const el = contentEl.querySelector(`#${CSS.escape(hash)}`);
+    const el = contentEl.querySelector(`#${CSS.escape(decodedHash)}`);
     if (el) {
       el.scrollIntoView({ behavior: "smooth" });
       return;
@@ -59,7 +64,7 @@ export function scrollToAnchor(contentEl: HTMLElement, hash: string): void {
   }
 
   // 2. VitePress（数字始まりに_付与）↔ GitHub（_なし）の変換
-  const alt = hash.startsWith("_") ? hash.slice(1) : `_${hash}`;
+  const alt = decodedHash.startsWith("_") ? decodedHash.slice(1) : `_${decodedHash}`;
   try {
     const el = contentEl.querySelector(`#${CSS.escape(alt)}`);
     if (el) {
@@ -71,16 +76,10 @@ export function scrollToAnchor(contentEl: HTMLElement, hash: string): void {
   }
 
   // 3. 見出しテキストのノーマライズ比較
-  const normalize = (s: string) =>
-    s
-      .toLowerCase()
-      .replace(/^_+/, "")
-      .replace(/[^\w]+/g, "-")
-      .replace(/^-+|-+$/g, "");
-  const target = normalize(hash);
+  const target = headingSlug(decodedHash.replace(/^_+/, ""));
   const headings = contentEl.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6");
   for (const h of headings) {
-    if (normalize(h.textContent?.trim() ?? "") === target) {
+    if (headingSlug(headingAnchorText(h)) === target) {
       h.scrollIntoView({ behavior: "smooth" });
       return;
     }

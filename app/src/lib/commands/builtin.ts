@@ -13,12 +13,52 @@ import { toggleActiveSourceView } from "$lib/actions/view-actions";
 import { i18n } from "$lib/i18n/index.svelte";
 import { pickerStore } from "$lib/stores/picker.svelte";
 import { reopenRecentlyClosedTab } from "$lib/actions/tab-actions";
+import { copyReference } from "$lib/actions/reference-copy";
+import type { ReferenceFormat, ReferenceTarget } from "$lib/reference-copy";
+
+function activeReferenceTarget(): ReferenceTarget | null {
+  const tab = tabStore.tabs.find((candidate) => candidate.id === tabStore.activeTabId);
+  return tab?.document && tab.source
+    ? { document: tab.document, source: tab.source, title: tab.title }
+    : null;
+}
+
+function registerDocumentReferenceCommand(
+  id: string,
+  format: ReferenceFormat,
+  label: () => string
+): void {
+  registerCommand({
+    id,
+    label: () => (activeReferenceTarget() ? label() : null),
+    run: async () => {
+      const target = activeReferenceTarget();
+      if (target) await copyReference(format, target);
+    },
+  });
+}
 
 registerCommand({
   id: "quickOpen.open",
   label: () => i18n.m.commands.quickOpen,
   run: () => pickerStore.openQuickOpen(),
 });
+
+registerDocumentReferenceCommand(
+  "reference.copyWiki",
+  "wiki",
+  () => i18n.m.commands.copyWikiReference
+);
+registerDocumentReferenceCommand(
+  "reference.copyMarkdown",
+  "markdown",
+  () => i18n.m.commands.copyMarkdownReference
+);
+registerDocumentReferenceCommand(
+  "reference.copyPath",
+  "path",
+  () => i18n.m.commands.copyPathReference
+);
 registerCommand({
   id: "commandPalette.open",
   label: () => i18n.m.commands.commandPalette,

@@ -1849,7 +1849,10 @@ fn extract_markdown_links(raw: &str, limit: usize) -> (Vec<ExtractedDocumentLink
         let Some((target, anchor)) = split_link_target(destination) else {
             continue;
         };
-        let target_lower = target.to_ascii_lowercase();
+        let Some(decoded_target) = decode_percent_encoded_target(&target) else {
+            continue;
+        };
+        let target_lower = decoded_target.to_ascii_lowercase();
         if !target_lower.ends_with(".md") && !target_lower.ends_with(".markdown") {
             continue;
         }
@@ -1900,6 +1903,33 @@ enum MarkdownLinkResolution {
     Excluded,
 }
 
+fn decode_percent_encoded_target(raw: &str) -> Option<String> {
+    fn hex_value(byte: u8) -> Option<u8> {
+        match byte {
+            b'0'..=b'9' => Some(byte - b'0'),
+            b'a'..=b'f' => Some(byte - b'a' + 10),
+            b'A'..=b'F' => Some(byte - b'A' + 10),
+            _ => None,
+        }
+    }
+
+    let bytes = raw.as_bytes();
+    let mut decoded = Vec::with_capacity(bytes.len());
+    let mut index = 0;
+    while index < bytes.len() {
+        if bytes[index] != b'%' {
+            decoded.push(bytes[index]);
+            index += 1;
+            continue;
+        }
+        let high = hex_value(*bytes.get(index + 1)?)?;
+        let low = hex_value(*bytes.get(index + 2)?)?;
+        decoded.push((high << 4) | low);
+        index += 3;
+    }
+    String::from_utf8(decoded).ok()
+}
+
 fn resolve_markdown_link(
     current_path: &str,
     raw_target: &str,
@@ -1907,10 +1937,15 @@ fn resolve_markdown_link(
     exact_paths: &HashSet<String>,
     native_paths_lower: &HashMap<String, String>,
 ) -> MarkdownLinkResolution {
-    let normalized_target = raw_target.replace('\\', "/");
+    let Some(decoded_target) = decode_percent_encoded_target(raw_target) else {
+        return MarkdownLinkResolution::Excluded;
+    };
+    let normalized_target = decoded_target.replace('\\', "/");
+    let source_root_relative =
+        normalized_target.starts_with('/') && !normalized_target.starts_with("//");
     if normalized_target.contains('\0')
-        || normalized_target.starts_with('/')
         || normalized_target.starts_with("//")
+        || (!source_root_relative && has_uri_scheme(&normalized_target))
         || normalized_target
             .as_bytes()
             .get(1)
@@ -1921,7 +1956,9 @@ fn resolve_markdown_link(
     let parent = current_path
         .rsplit_once('/')
         .map_or("", |(parent, _)| parent);
-    let combined = if parent.is_empty() {
+    let combined = if source_root_relative {
+        normalized_target.trim_start_matches('/').to_string()
+    } else if parent.is_empty() {
         normalized_target
     } else {
         format!("{parent}/{normalized_target}")
@@ -2790,6 +2827,7 @@ mod tests {
 
 [inline](guide/target.md#Section)
 [reference][target]
+[encoded](guide/encoded%2Emd)
 ![image](guide/image.md)
 [external](https://example.com/page.md)
 [file](file:///C:/secret.md)
@@ -2803,11 +2841,12 @@ mod tests {
 "#;
         let (links, truncated) = extract_markdown_links(raw, 20);
         assert!(!truncated);
-        assert_eq!(links.len(), 2);
+        assert_eq!(links.len(), 3);
         assert_eq!(links[0].raw_target, "guide/target.md");
         assert_eq!(links[0].anchor.as_deref(), Some("Section"));
         assert_eq!(links[1].raw_target, "guide/reference.markdown");
         assert_eq!(links[1].anchor.as_deref(), Some("Details"));
+        assert_eq!(links[2].raw_target, "guide/encoded%2Emd");
         assert!(links
             .iter()
             .all(|link| link.kind == DocumentLinkKind::Markdown));
@@ -2821,8 +2860,17 @@ mod tests {
         let backend = SourceBackend::Native(NativeSource {
             root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
         });
-        let paths = HashSet::from(["guide/current.md".to_string(), "target.md".to_string()]);
-        let lower = HashMap::from([("target.md".to_string(), "target.md".to_string())]);
+        let paths = HashSet::from([
+            "guide/current.md".to_string(),
+            "target.md".to_string(),
+            "read me.md".to_string(),
+            "https:note.md".to_string(),
+        ]);
+        let lower = HashMap::from([
+            ("target.md".to_string(), "target.md".to_string()),
+            ("read me.md".to_string(), "read me.md".to_string()),
+            ("https:note.md".to_string(), "https:note.md".to_string()),
+        ]);
 
         assert!(matches!(
             resolve_markdown_link("guide/current.md", "../target.md", &backend, &paths, &lower),
@@ -2831,6 +2879,20 @@ mod tests {
         assert!(matches!(
             resolve_markdown_link("guide/current.md", "missing.md", &backend, &paths, &lower),
             MarkdownLinkResolution::Missing
+        ));
+        assert!(matches!(
+            resolve_markdown_link("guide/current.md", "/target.md", &backend, &paths, &lower),
+            MarkdownLinkResolution::Resolved(path) if path == "target.md"
+        ));
+        assert!(matches!(
+            resolve_markdown_link(
+                "guide/current.md",
+                "/../../outside.md",
+                &backend,
+                &paths,
+                &lower
+            ),
+            MarkdownLinkResolution::Excluded
         ));
         assert!(matches!(
             resolve_markdown_link(
@@ -2874,6 +2936,28 @@ mod tests {
         ));
         assert!(matches!(
             resolve_markdown_link("guide/current.md", "bad\0name.md", &backend, &paths, &lower),
+            MarkdownLinkResolution::Excluded
+        ));
+        assert!(matches!(
+            resolve_markdown_link("guide/current.md", "/read%20me.md", &backend, &paths, &lower),
+            MarkdownLinkResolution::Resolved(path) if path == "read me.md"
+        ));
+        assert!(matches!(
+            resolve_markdown_link("guide/current.md", "/https:note.md", &backend, &paths, &lower),
+            MarkdownLinkResolution::Resolved(path) if path == "https:note.md"
+        ));
+        assert!(matches!(
+            resolve_markdown_link("guide/current.md", "/bad%2", &backend, &paths, &lower),
+            MarkdownLinkResolution::Excluded
+        ));
+        assert!(matches!(
+            resolve_markdown_link(
+                "guide/current.md",
+                "https%3A%2F%2Fexample.com%2Ftarget.md",
+                &backend,
+                &paths,
+                &lower
+            ),
             MarkdownLinkResolution::Excluded
         ));
     }
@@ -3036,7 +3120,7 @@ mod tests {
         std::fs::write(directory.path().join("target.md"), "# Target").unwrap();
         std::fs::write(
             directory.path().join("guide/current.md"),
-            "[Target](../target.md#Intro) [again](../target.md#Intro) [[target]] [missing](missing.md) [self](current.md) [outside](../../outside.md)",
+            "[Target](/target.md#Intro) [again](../target.md#Intro) [[target]] [missing](missing.md) [self](current.md) [outside](../../outside.md)",
         )
         .unwrap();
         let roots = AllowedRoots::new();
@@ -3197,7 +3281,7 @@ mod tests {
                 ("target.md", b"# Target"),
                 (
                     "guide/current.md",
-                    b"[target](../target.md#Intro) [missing](missing.md)",
+                    b"[target](/target.md#Intro) [missing](missing.md)",
                 ),
             ],
         );

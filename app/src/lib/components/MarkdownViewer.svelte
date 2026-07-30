@@ -35,6 +35,7 @@
   import { saveRecent } from "$lib/recent-store";
   import { Archive, FilePlus, FolderOpen, X } from "@lucide/svelte";
   import { runCommand } from "$lib/commands/registry";
+  import { referenceCopyFeedbackStore } from "$lib/stores/reference-copy.svelte";
   import SearchBar from "./SearchBar.svelte";
   import SafeModeView from "./SafeModeView.svelte";
   import SourceView from "./SourceView.svelte";
@@ -641,6 +642,8 @@
           tab.document && tab.source ? nativeDocumentPath(tab.source, tab.document) : null,
         canOpenExternalEditor: !!tab.source?.capabilities.externalEditor,
         title: tab.title,
+        document: tab.document,
+        source: tab.source,
       },
       renderedHtml,
       renderMode: tab.renderMode ?? "full",
@@ -786,6 +789,16 @@
       </div>
     {/if}
   </div>
+  {#if referenceCopyFeedbackStore.feedback}
+    <div
+      class="pointer-events-none absolute bottom-3 left-1/2 z-20 -translate-x-1/2 rounded border bg-background px-3 py-2 text-sm shadow"
+      class:text-destructive={referenceCopyFeedbackStore.feedback.kind === "error"}
+      role="status"
+      aria-live="polite"
+    >
+      {referenceCopyFeedbackStore.feedback.message}
+    </div>
+  {/if}
 </div>
 
 <style>

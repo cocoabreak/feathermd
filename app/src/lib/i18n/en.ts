@@ -87,6 +87,9 @@ export const en: typeof ja = {
     zoomIn: "Zoom In",
     zoomOut: "Zoom Out",
     zoomReset: "Reset Zoom",
+    copyWikiReference: "Copy Current Document as Wiki Link",
+    copyMarkdownReference: "Copy Current Document as Markdown Link",
+    copyPathReference: "Copy Current Document Path",
   },
   contextMenu: {
     copy: "Copy",
@@ -96,6 +99,17 @@ export const en: typeof ja = {
     saveAsHtml: "Save as HTML...",
     print: "Print / Save as PDF...",
     openExternalEditor: "Open in External Editor",
+  },
+  referenceCopy: {
+    menu: "Copy Reference",
+    wiki: "Wiki Link",
+    markdown: "Markdown Link (Source Root)",
+    path: "File Path",
+    headingWiki: "Wiki Link with Heading",
+    headingMarkdown: "Markdown Link with Heading",
+    headingName: "Heading Name",
+    copied: "Reference copied",
+    failed: "Could not copy reference",
   },
   trust: {
     title: "Trust Folder",
