@@ -63,7 +63,7 @@ export default [
 
   // Node.js 環境のコンフィグファイル
   {
-    files: ["vite.config.js", "*.config.js", "*.config.ts"],
+    files: ["vite.config.js", "*.config.js", "*.config.ts", "perf/**/*.mjs"],
     languageOptions: {
       globals: { ...globals.node },
     },

@@ -164,9 +164,25 @@ jobs:
       - working-directory: app
         run: npm ci
 
+      - name: Test performance metrics tooling
+        working-directory: app
+        run: npm run perf:test
+
+      - name: Measure frontend size and rebuild production output
+        working-directory: app
+        run: npm run perf:ci
+
+      - name: Upload frontend size report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-frontend-size
+          path: app/perf/artifacts/
+          retention-days: 14
+
       - name: Verify production E2E hooks are absent
         working-directory: app
-        run: npm run build && npm run e2e:check-production
+        run: npm run e2e:check-production
 
       - name: Build Tauri app
         working-directory: app/src-tauri

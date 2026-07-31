@@ -4,6 +4,7 @@ node_modules
 /.svelte-kit
 /package
 /coverage
+/perf/artifacts/
 .env
 .env.*
 !.env.example

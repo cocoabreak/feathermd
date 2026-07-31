@@ -56,9 +56,9 @@ fixtureは内容とバイト数が決定的になるようUTF-8・LFで管理す
 - 初期ロード集合に含まれないJavaScript/CSSを遅延集合として分類した結果
 - KaTeX、Mermaid、Shikiを含む主要遅延チャンクの対応
 
-通常の `npm run build` はVite manifestを生成しない。解析時だけ `FEATHERMD_PERF_MANIFEST=1` を設定し、`vite.config.js` のbuild-time分岐で `build/.vite/perf-manifest.json` を生成する。`build-metrics.mjs` はこのmanifestとimport関係から、ハッシュを含むファイル名をentryまたは機能グループへ正規化する。同じ機能が複数chunkへ分割された場合はグループ合計でも比較する。manifest自身はサイズ集計から除外する。
+SvelteKitはclient buildの内部manifestを `.svelte-kit/output/client/.vite/manifest.json` へ生成するが、adapter-staticの最終 `app/build/` へはコピーしない。解析時だけ、この内部manifestを同じbuild出力の `build/.vite/perf-manifest.json` へコピーする。`build-metrics.mjs` はこのmanifestとimport関係から、ハッシュを含むファイル名をentryまたは機能グループへ正規化する。同じ機能が複数chunkへ分割された場合はグループ合計でも比較する。manifest自身はサイズ集計から除外する。
 
-解析後はmanifestを含む解析出力を破棄し、環境変数なしの通常productionビルドを改めて実行してTauriへ渡す。通常ビルドの `app/build/` とTauri成果物にperf manifestが存在しないことを検査する。解析用分岐はNode上のビルド設定だけに置き、クライアントコードへdefineや実行時分岐を追加しない。
+解析後はmanifestを含む解析出力を破棄し、通常productionビルドを改めて実行してTauriへ渡す。通常ビルドの `app/build/` とTauri成果物にperf manifestが存在しないことを検査する。解析処理はNode runnerだけに置き、Vite設定、クライアントコード、productionバンドルへdefineや実行時分岐を追加しない。
 
 Windows配布物は引数で渡された実行ファイル、MSI、NSIS、portable ZIPだけを対象にする。存在しない形式を0 byteとして扱わず `not-measured` とする。配布物サイズはローカルのリリースQAまたはrelease workflowで生成済みの成果物から採取し、Viteサイズと別セクションへ記録する。
 
@@ -115,6 +115,7 @@ Windowsのプロセス情報から、起動したTauri PIDを根として子孫P
 type PerformanceResult = {
   schemaVersion: number;
   fixtureVersion: string;
+  measuredAt: string;
   source: { commit: string; appVersion: string; dirty: boolean };
   environment: Record<string, string | number>;
   build: BuildMetrics;
@@ -129,7 +130,7 @@ type PerformanceResult = {
 
 ## 8. CIと回帰判定
 
-GitHub Actionsの既存 `windows-desktop-build` は、perf manifest付き解析build、サイズ計測とartifact保存、解析出力の破棄、環境変数なしの通常production build、perf manifest不在検査、Tauri buildの順に実行する。時間・メモリはhosted runnerの負荷とWebView2対話環境に左右されるため実行しない。
+GitHub Actionsの既存 `windows-desktop-build` は、通常build、SvelteKit内部manifestの解析用コピー、サイズ計測とartifact保存、解析出力の破棄、通常production buildの再実行、perf manifest不在検査、Tauri buildの順に実行する。時間・メモリはhosted runnerの負荷とWebView2対話環境に左右されるため実行しない。
 
 導入直後はサイズ結果をレポートのみとし、複数回の実測で自然変動とハッシュ分割の変化を確認する。上限を設定するときは別変更としてレビューし、少なくとも次を対象にする。
 
