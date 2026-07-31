@@ -1,3 +1,4 @@
+use crate::commands::file::safe_outline::{extract_safe_outline, SafeOutlineHeading};
 use crate::commands::file::{
     build_markdown_content, mime_from_extension, normalize_path_for_frontend,
     read_dir_single_level, AllowedRoots, MarkdownFileContent, MAX_IMAGE_BYTES, MAX_MARKDOWN_BYTES,
@@ -11,6 +12,7 @@ use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{Read, Seek, SeekFrom};
 use std::path::{Component, Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{State, WebviewWindow};
@@ -90,6 +92,32 @@ const MAX_LINK_INDEX_STRINGS: usize = 8 * 1024 * 1024;
 const MAX_LINK_CONTEXT_ITEMS: usize = 500;
 const MAX_LINK_CONTEXT_BYTES: usize = 1024 * 1024;
 const MAX_LINK_PREVIEW_BYTES: u64 = 256 * 1024;
+const MAX_REFERENCE_VALIDATION_DOCUMENTS: usize = 64;
+const MAX_REFERENCE_VALIDATION_TOTAL_BYTES: usize = 32 * 1024 * 1024;
+const MAX_REFERENCE_VALIDATION_ITEMS: usize = 500;
+const MAX_REFERENCE_IMAGE_REFERENCES: usize = 2_000;
+const MAX_REFERENCE_IMAGE_STRING_BYTES: usize = 128 * 1024;
+const MAX_REFERENCE_LINK_STRING_BYTES: usize = 256 * 1024;
+const MAX_REFERENCE_HEADING_STRING_BYTES: usize = 512 * 1024;
+const MAX_REFERENCE_VALIDATION_BYTES: usize = 1024 * 1024;
+static REFERENCE_VALIDATION_IN_FLIGHT: AtomicBool = AtomicBool::new(false);
+
+struct ReferenceValidationGuard;
+
+impl ReferenceValidationGuard {
+    fn acquire() -> Result<Self, String> {
+        REFERENCE_VALIDATION_IN_FLIGHT
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .map(|_| Self)
+            .map_err(|_| "別の参照検証を処理中です".to_string())
+    }
+}
+
+impl Drop for ReferenceValidationGuard {
+    fn drop(&mut self) {
+        REFERENCE_VALIDATION_IN_FLIGHT.store(false, Ordering::Release);
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum ZipEntryKind {
@@ -189,6 +217,56 @@ pub struct LinkContextResponse {
     outgoing: LinkContextSection,
     incoming: LinkContextSection,
     broken: LinkContextSection,
+    truncated: bool,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub enum ReferenceProblemKind {
+    Image,
+}
+
+#[derive(Clone, Copy, Debug, Serialize, PartialEq, Eq, Hash)]
+#[serde(rename_all = "camelCase")]
+pub enum ReferenceProblemStatus {
+    Missing,
+    OutsideSource,
+    Unverifiable,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct SourceReferenceProblem {
+    kind: ReferenceProblemKind,
+    raw_target: String,
+    status: ReferenceProblemStatus,
+    reference_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HeadingValidationReference {
+    document: DocumentRef,
+    raw_target: String,
+    anchor: String,
+    kind: DocumentLinkKind,
+    reference_count: usize,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct HeadingValidationDocument {
+    document: DocumentRef,
+    headings: Vec<SafeOutlineHeading>,
+    complete: bool,
+}
+
+#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+pub struct ReferenceValidationResponse {
+    image_problems: Vec<SourceReferenceProblem>,
+    heading_references: Vec<HeadingValidationReference>,
+    heading_documents: Vec<HeadingValidationDocument>,
     truncated: bool,
 }
 
@@ -545,6 +623,10 @@ fn resolve_native_path(
         return Err("ソースのルート外へ移動できません".to_string());
     }
     Ok(resolved)
+}
+
+fn is_path_within_native_source(source: &NativeSource, path: &Path) -> bool {
+    path.starts_with(&source.root)
 }
 
 fn is_markdown_virtual_path(path: &str) -> bool {
@@ -1652,37 +1734,69 @@ pub async fn list_source_markdown_documents(
     .map_err(|error| format!("Markdown一覧の取得に失敗しました: {error}"))?
 }
 
+fn read_source_text_with_limit(
+    backend: &SourceBackend,
+    path: &str,
+    roots: &AllowedRoots,
+    zip_archive: Option<&mut zip::ZipArchive<File>>,
+    max_bytes: u64,
+) -> Result<Option<String>, String> {
+    match backend {
+        SourceBackend::Native(source) => {
+            let path = resolve_native_path(source, path, roots)?;
+            let (mut file, canonical) = crate::commands::file::trusted_paths::open_allowed_file(
+                roots,
+                &path.to_string_lossy(),
+            )?;
+            if !is_path_within_native_source(source, &canonical)
+                || !is_markdown_virtual_path(canonical.to_string_lossy().as_ref())
+            {
+                return Err("Markdown文書が現在のソース範囲外です".to_string());
+            }
+            if file
+                .metadata()
+                .map_err(|error| format!("ファイル情報を取得できませんでした: {error}"))?
+                .len()
+                > max_bytes
+            {
+                return Ok(None);
+            }
+            let mut raw = String::new();
+            file.by_ref()
+                .take(max_bytes + 1)
+                .read_to_string(&mut raw)
+                .map_err(|error| format!("ファイル読み込みエラー: {error}"))?;
+            if raw.len() as u64 > max_bytes {
+                return Ok(None);
+            }
+            Ok(Some(raw))
+        }
+        SourceBackend::Zip(source) => {
+            let archive =
+                zip_archive.ok_or_else(|| "ZIP検索用アーカイブが開かれていません".to_string())?;
+            if source
+                .entries
+                .get(path)
+                .is_some_and(|entry| entry.uncompressed_size > max_bytes)
+            {
+                return Ok(None);
+            }
+            let bytes = read_zip_entry_from_archive(source, path, max_bytes, archive)?;
+            String::from_utf8(bytes)
+                .map(Some)
+                .map_err(|_| "ZIP内のMarkdownはUTF-8で保存してください".to_string())
+        }
+    }
+}
+
 fn read_source_text(
     backend: &SourceBackend,
     path: &str,
     roots: &AllowedRoots,
     zip_archive: Option<&mut zip::ZipArchive<File>>,
 ) -> Result<String, String> {
-    match backend {
-        SourceBackend::Native(source) => {
-            let path = resolve_native_path(source, path, roots)?;
-            let (mut file, _) = crate::commands::file::trusted_paths::open_allowed_file(
-                roots,
-                &path.to_string_lossy(),
-            )?;
-            let mut raw = String::new();
-            file.by_ref()
-                .take(MAX_MARKDOWN_BYTES + 1)
-                .read_to_string(&mut raw)
-                .map_err(|error| format!("ファイル読み込みエラー: {error}"))?;
-            if raw.len() as u64 > MAX_MARKDOWN_BYTES {
-                return Err("Markdownファイルは10MiB以下にしてください".to_string());
-            }
-            Ok(raw)
-        }
-        SourceBackend::Zip(source) => {
-            let archive =
-                zip_archive.ok_or_else(|| "ZIP検索用アーカイブが開かれていません".to_string())?;
-            let bytes = read_zip_entry_from_archive(source, path, MAX_MARKDOWN_BYTES, archive)?;
-            String::from_utf8(bytes)
-                .map_err(|_| "ZIP内のMarkdownはUTF-8で保存してください".to_string())
-        }
-    }
+    read_source_text_with_limit(backend, path, roots, zip_archive, MAX_MARKDOWN_BYTES)?
+        .ok_or_else(|| "Markdownファイルは10MiB以下にしてください".to_string())
 }
 
 fn truncate_search_preview(line: &str) -> String {
@@ -1886,6 +2000,236 @@ fn extract_document_links(
     links.extend(markdown_links);
     truncated |= markdown_truncated;
     (links, truncated)
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+struct ExtractedImageReference {
+    raw_target: String,
+}
+
+fn extract_image_references(raw: &str, limit: usize) -> (Vec<ExtractedImageReference>, bool) {
+    let mut images = Vec::new();
+    for event in Parser::new(raw) {
+        let Event::Start(Tag::Image { dest_url, .. }) = event else {
+            continue;
+        };
+        let target = dest_url.as_ref().trim();
+        if target.is_empty() || (has_uri_scheme(target) && !is_absolute_link_target(target)) {
+            continue;
+        }
+        if target.len() > super::wiki::MAX_WIKI_TARGET_BYTES || images.len() >= limit {
+            return (images, true);
+        }
+        images.push(ExtractedImageReference {
+            raw_target: target.to_string(),
+        });
+    }
+    (images, false)
+}
+
+fn extract_same_document_markdown_anchors(
+    raw: &str,
+    limit: usize,
+) -> (Vec<ExtractedDocumentLink>, bool) {
+    let mut links = Vec::new();
+    for event in Parser::new(raw) {
+        let Event::Start(Tag::Link { dest_url, .. }) = event else {
+            continue;
+        };
+        let destination = dest_url.as_ref().trim();
+        let Some(anchor) = destination
+            .strip_prefix('#')
+            .filter(|anchor| !anchor.is_empty())
+        else {
+            continue;
+        };
+        if anchor.len() > super::wiki::MAX_WIKI_TARGET_BYTES || links.len() >= limit {
+            return (links, true);
+        }
+        links.push(ExtractedDocumentLink {
+            raw_target: String::new(),
+            anchor: Some(anchor.to_string()),
+            kind: DocumentLinkKind::Markdown,
+        });
+    }
+    (links, false)
+}
+
+fn extract_same_document_wiki_anchors(
+    raw: &str,
+    limit: usize,
+) -> (Vec<ExtractedDocumentLink>, bool) {
+    let mut excluded_ranges = Vec::new();
+    let mut code_block_start = None;
+    for (event, range) in Parser::new(raw).into_offset_iter() {
+        match event {
+            Event::Start(Tag::CodeBlock(_)) => code_block_start = Some(range.start),
+            Event::End(TagEnd::CodeBlock) => {
+                if let Some(start) = code_block_start.take() {
+                    excluded_ranges.push(start..range.end);
+                }
+            }
+            Event::Code(_) if code_block_start.is_none() => excluded_ranges.push(range),
+            Event::Html(_) | Event::InlineHtml(_) if code_block_start.is_none() => {
+                excluded_ranges.push(range)
+            }
+            _ => {}
+        }
+    }
+    if let Some(start) = code_block_start {
+        excluded_ranges.push(start..raw.len());
+    }
+
+    let mut links = Vec::new();
+    let mut offset = 0;
+    while offset < raw.len() {
+        let Some(relative_start) = raw[offset..].find("[[") else {
+            break;
+        };
+        let start = offset + relative_start;
+        let Some(relative_end) = raw[start + 2..].find("]]") else {
+            break;
+        };
+        let end = start + 2 + relative_end;
+        let candidate_end = end + 2;
+        let escaped = raw[..start]
+            .bytes()
+            .rev()
+            .take_while(|byte| *byte == b'\\')
+            .count()
+            % 2
+            == 1;
+        let excluded = excluded_ranges
+            .iter()
+            .any(|range| range.start < candidate_end && range.end > start);
+        let inner = &raw[start + 2..end];
+        if inner.contains("[[") {
+            offset = start + 2;
+            continue;
+        }
+        let target = inner
+            .split_once('|')
+            .map_or(inner, |(target, _)| target)
+            .trim();
+        if !escaped && !excluded && !inner.contains(']') && !inner.contains('\n') {
+            if let Some(anchor) = target.strip_prefix('#').filter(|anchor| !anchor.is_empty()) {
+                if anchor.len() > super::wiki::MAX_WIKI_TARGET_BYTES || links.len() >= limit {
+                    return (links, true);
+                }
+                links.push(ExtractedDocumentLink {
+                    raw_target: String::new(),
+                    anchor: Some(anchor.to_string()),
+                    kind: DocumentLinkKind::Wiki,
+                });
+            }
+        }
+        offset = candidate_end;
+    }
+    (links, false)
+}
+
+fn resolve_relative_virtual_target(
+    backend: &SourceBackend,
+    source_path: &str,
+    raw_target: &str,
+) -> Result<String, ReferenceProblemStatus> {
+    let path_only = raw_target
+        .split_once('#')
+        .map_or(raw_target, |(path, _)| path);
+    if path_only.contains('?') || path_only.contains('\0') {
+        return Err(ReferenceProblemStatus::Unverifiable);
+    }
+    let decoded =
+        decode_percent_encoded_target(path_only).ok_or(ReferenceProblemStatus::Unverifiable)?;
+    if decoded.is_empty() {
+        return Err(ReferenceProblemStatus::OutsideSource);
+    }
+    let normalized_target = decoded.replace('\\', "/");
+    if normalized_target.starts_with('/') && !normalized_target.starts_with("//") {
+        return normalize_virtual_path(normalized_target.trim_start_matches('/'))
+            .map_err(|_| ReferenceProblemStatus::OutsideSource);
+    }
+    if is_absolute_link_target(&normalized_target) {
+        let SourceBackend::Native(source) = backend else {
+            return Err(ReferenceProblemStatus::OutsideSource);
+        };
+        let root = normalize_path_for_frontend(&source.root).replace('\\', "/");
+        let root = root.trim_end_matches('/');
+        let boundary = root.len();
+        if !normalized_target
+            .get(..boundary)
+            .is_some_and(|prefix| prefix.eq_ignore_ascii_case(root))
+            || normalized_target.as_bytes().get(boundary) != Some(&b'/')
+        {
+            return Err(ReferenceProblemStatus::OutsideSource);
+        }
+        return normalize_virtual_path(&normalized_target[boundary + 1..])
+            .map_err(|_| ReferenceProblemStatus::OutsideSource);
+    }
+    if has_uri_scheme(&decoded) {
+        return Err(ReferenceProblemStatus::OutsideSource);
+    }
+    let parent = source_path
+        .rsplit_once('/')
+        .map_or("", |(parent, _)| parent);
+    let combined = if parent.is_empty() {
+        normalized_target
+    } else {
+        format!("{parent}/{normalized_target}")
+    };
+    normalize_virtual_path(&combined).map_err(|_| ReferenceProblemStatus::OutsideSource)
+}
+
+fn validate_image_reference(
+    backend: &SourceBackend,
+    source_path: &str,
+    raw_target: &str,
+    roots: &AllowedRoots,
+) -> Option<ReferenceProblemStatus> {
+    let path = match resolve_relative_virtual_target(backend, source_path, raw_target) {
+        Ok(path) => path,
+        Err(status) => return Some(status),
+    };
+    if !is_supported_image_virtual_path(&path) {
+        return Some(ReferenceProblemStatus::Unverifiable);
+    }
+    match backend {
+        SourceBackend::Native(source) => {
+            let candidate = source.root.join(&path);
+            match std::fs::symlink_metadata(&candidate) {
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    return Some(ReferenceProblemStatus::Missing);
+                }
+                Err(_) => return Some(ReferenceProblemStatus::Unverifiable),
+                Ok(_) => {}
+            }
+            match std::fs::canonicalize(&candidate) {
+                Ok(canonical) if !canonical.starts_with(&source.root) => {
+                    return Some(ReferenceProblemStatus::OutsideSource);
+                }
+                Err(_) => return Some(ReferenceProblemStatus::Unverifiable),
+                _ => {}
+            }
+            match crate::commands::file::trusted_paths::open_allowed_file(
+                roots,
+                &candidate.to_string_lossy(),
+            ) {
+                Ok((file, canonical))
+                    if is_path_within_native_source(source, &canonical)
+                        && file.metadata().is_ok_and(|metadata| metadata.is_file()) =>
+                {
+                    None
+                }
+                Ok(_) => Some(ReferenceProblemStatus::OutsideSource),
+                _ => Some(ReferenceProblemStatus::Unverifiable),
+            }
+        }
+        SourceBackend::Zip(source) => match source.entries.get(&path) {
+            Some(entry) if entry.kind == ZipEntryKind::File => None,
+            Some(_) => Some(ReferenceProblemStatus::Unverifiable),
+            None => Some(ReferenceProblemStatus::Missing),
+        },
+    }
 }
 
 #[cfg(test)]
@@ -2349,6 +2693,382 @@ pub async fn get_source_link_context(
     })
     .await
     .map_err(|error| format!("リンク情報の取得に失敗しました: {error}"))?
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+struct AggregatedHeadingReferenceKey {
+    target_path: String,
+    raw_target: String,
+    anchor: String,
+    kind: DocumentLinkKind,
+}
+
+fn safe_reference_label(raw_target: &str) -> String {
+    let target = raw_target.trim();
+    let normalized = target.replace('\\', "/");
+    if normalized.starts_with("//")
+        || normalized
+            .as_bytes()
+            .get(1)
+            .is_some_and(|byte| *byte == b':')
+    {
+        return "<absolute-path>".to_string();
+    }
+    target.chars().take(1_024).collect()
+}
+
+fn estimated_json_string_bytes(bytes: usize, overhead: usize) -> usize {
+    bytes.saturating_mul(6).saturating_add(overhead)
+}
+
+#[derive(Clone, Copy)]
+struct ReferenceValidationLimits {
+    max_documents: usize,
+    max_total_bytes: usize,
+}
+
+const REFERENCE_VALIDATION_LIMITS: ReferenceValidationLimits = ReferenceValidationLimits {
+    max_documents: MAX_REFERENCE_VALIDATION_DOCUMENTS,
+    max_total_bytes: MAX_REFERENCE_VALIDATION_TOTAL_BYTES,
+};
+
+fn build_reference_validation(
+    document: &DocumentRef,
+    include_wiki_links: bool,
+    respect_gitignore: bool,
+    roots: &AllowedRoots,
+    registry: &SourceRegistry,
+) -> Result<ReferenceValidationResponse, String> {
+    build_reference_validation_with_limits(
+        document,
+        include_wiki_links,
+        respect_gitignore,
+        roots,
+        registry,
+        REFERENCE_VALIDATION_LIMITS,
+    )
+}
+
+fn build_reference_validation_with_limits(
+    document: &DocumentRef,
+    include_wiki_links: bool,
+    respect_gitignore: bool,
+    roots: &AllowedRoots,
+    registry: &SourceRegistry,
+    limits: ReferenceValidationLimits,
+) -> Result<ReferenceValidationResponse, String> {
+    let source_path = normalize_virtual_path(&document.path)?;
+    if !is_markdown_virtual_path(&source_path) {
+        return Err("Markdown文書を指定してください".to_string());
+    }
+    let backend = registry.get(&document.source_id)?;
+    let (mut candidate_paths, paths_truncated) = collect_source_markdown_paths_with_status(
+        &backend,
+        true,
+        respect_gitignore && backend.capabilities().respect_gitignore,
+        roots,
+        MAX_ARCHIVE_ENTRIES,
+    )?;
+    candidate_paths.sort_by_key(|path| path.to_lowercase());
+    let files = super::wiki::WikiFileIndex::new(&candidate_paths);
+    let exact_paths = candidate_paths.iter().cloned().collect::<HashSet<_>>();
+    let native_paths_lower = candidate_paths
+        .iter()
+        .map(|path| (path.to_lowercase(), path.clone()))
+        .collect::<HashMap<_, _>>();
+    let mut zip_archive = match backend.as_ref() {
+        SourceBackend::Zip(source) => Some(
+            source
+                .archive
+                .lock()
+                .map_err(|_| "ZIPアーカイブのロックに失敗しました".to_string())?,
+        ),
+        SourceBackend::Native(_) => None,
+    };
+    let raw = read_source_text(&backend, &source_path, roots, zip_archive.as_deref_mut())?;
+    let mut remaining_response_bytes = MAX_REFERENCE_VALIDATION_BYTES;
+
+    let (images, images_truncated) = extract_image_references(&raw, MAX_REFERENCE_IMAGE_REFERENCES);
+    let mut image_counts = HashMap::<(String, ReferenceProblemStatus), usize>::new();
+    for image in images {
+        if let Some(status) =
+            validate_image_reference(&backend, &source_path, &image.raw_target, roots)
+        {
+            let label = safe_reference_label(&image.raw_target);
+            *image_counts.entry((label, status)).or_default() += 1;
+        }
+    }
+    let mut image_problems = image_counts
+        .into_iter()
+        .map(
+            |((raw_target, status), reference_count)| SourceReferenceProblem {
+                kind: ReferenceProblemKind::Image,
+                raw_target,
+                status,
+                reference_count,
+            },
+        )
+        .collect::<Vec<_>>();
+    image_problems.sort_by(|left, right| left.raw_target.cmp(&right.raw_target));
+    let mut image_string_bytes = 0usize;
+    let image_count = image_problems.len();
+    image_problems.retain(|problem| {
+        let next = image_string_bytes.saturating_add(problem.raw_target.len());
+        let response_bytes = estimated_json_string_bytes(problem.raw_target.len(), 128);
+        if next > MAX_REFERENCE_IMAGE_STRING_BYTES || response_bytes > remaining_response_bytes {
+            false
+        } else {
+            image_string_bytes = next;
+            remaining_response_bytes -= response_bytes;
+            true
+        }
+    });
+
+    let (mut links, links_truncated) =
+        extract_document_links(&raw, include_wiki_links, MAX_REFERENCE_VALIDATION_ITEMS);
+    let remaining = MAX_REFERENCE_VALIDATION_ITEMS.saturating_sub(links.len());
+    let (same_markdown, same_markdown_truncated) =
+        extract_same_document_markdown_anchors(&raw, remaining);
+    links.extend(same_markdown);
+    let remaining = MAX_REFERENCE_VALIDATION_ITEMS.saturating_sub(links.len());
+    let (same_wiki, same_wiki_truncated) = if include_wiki_links {
+        extract_same_document_wiki_anchors(&raw, remaining)
+    } else {
+        (Vec::new(), false)
+    };
+    links.extend(same_wiki);
+
+    let current_dir = super::wiki::parent_components_lower(&source_path);
+    let mut inspections = 0usize;
+    let mut heading_counts = HashMap::<AggregatedHeadingReferenceKey, usize>::new();
+    let mut truncated = paths_truncated
+        || images_truncated
+        || links_truncated
+        || same_markdown_truncated
+        || same_wiki_truncated
+        || image_problems.len() < image_count;
+    for link in links {
+        let Some(anchor) = link.anchor.filter(|anchor| !anchor.is_empty()) else {
+            continue;
+        };
+        let target_path = if link.raw_target.is_empty() {
+            Some(source_path.clone())
+        } else {
+            match link.kind {
+                DocumentLinkKind::Wiki => match files.resolve_target(
+                    &link.raw_target,
+                    &current_dir,
+                    &mut inspections,
+                    MAX_BACKLINK_CANDIDATE_INSPECTIONS,
+                ) {
+                    Ok(resolved) => resolved,
+                    Err(_) => {
+                        truncated = true;
+                        break;
+                    }
+                },
+                DocumentLinkKind::Markdown => match resolve_markdown_link(
+                    &source_path,
+                    &link.raw_target,
+                    &backend,
+                    &exact_paths,
+                    &native_paths_lower,
+                ) {
+                    MarkdownLinkResolution::Resolved(resolved) => Some(resolved),
+                    MarkdownLinkResolution::Missing | MarkdownLinkResolution::Excluded => None,
+                },
+            }
+        };
+        let Some(target_path) = target_path else {
+            continue;
+        };
+        if heading_counts.len() >= MAX_REFERENCE_VALIDATION_ITEMS {
+            truncated = true;
+            break;
+        }
+        let key = AggregatedHeadingReferenceKey {
+            target_path,
+            raw_target: safe_reference_label(&link.raw_target),
+            anchor,
+            kind: link.kind,
+        };
+        *heading_counts.entry(key).or_default() += 1;
+    }
+
+    let mut heading_references = heading_counts
+        .into_iter()
+        .map(|(key, reference_count)| HeadingValidationReference {
+            document: DocumentRef {
+                source_id: document.source_id.clone(),
+                path: key.target_path,
+            },
+            raw_target: key.raw_target,
+            anchor: key.anchor,
+            kind: key.kind,
+            reference_count,
+        })
+        .collect::<Vec<_>>();
+    heading_references.sort_by(|left, right| {
+        left.document
+            .path
+            .cmp(&right.document.path)
+            .then_with(|| left.anchor.cmp(&right.anchor))
+    });
+    let mut reference_string_bytes = 0usize;
+    let reference_count = heading_references.len();
+    heading_references.retain(|reference| {
+        let bytes = reference
+            .document
+            .path
+            .len()
+            .saturating_add(reference.raw_target.len())
+            .saturating_add(reference.anchor.len());
+        let next = reference_string_bytes.saturating_add(bytes);
+        let response_bytes = estimated_json_string_bytes(
+            bytes.saturating_add(reference.document.source_id.len()),
+            256,
+        );
+        if next > MAX_REFERENCE_LINK_STRING_BYTES || response_bytes > remaining_response_bytes {
+            false
+        } else {
+            reference_string_bytes = next;
+            remaining_response_bytes -= response_bytes;
+            true
+        }
+    });
+    truncated |= heading_references.len() < reference_count;
+
+    let mut target_paths = heading_references
+        .iter()
+        .map(|reference| reference.document.path.clone())
+        .collect::<HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    target_paths.sort();
+    if target_paths.len() > limits.max_documents {
+        target_paths.truncate(limits.max_documents);
+        truncated = true;
+    }
+    let mut total_bytes = raw.len();
+    let mut heading_string_bytes = 0usize;
+    let mut heading_budget_exhausted = false;
+    let mut heading_documents = Vec::with_capacity(target_paths.len());
+    for target_path in target_paths {
+        let target_raw = if target_path == source_path {
+            Some(raw.clone())
+        } else {
+            let remaining = limits.max_total_bytes.saturating_sub(total_bytes);
+            if remaining == 0 {
+                truncated = true;
+                None
+            } else {
+                match read_source_text_with_limit(
+                    &backend,
+                    &target_path,
+                    roots,
+                    zip_archive.as_deref_mut(),
+                    (remaining as u64).min(MAX_MARKDOWN_BYTES),
+                ) {
+                    Ok(Some(target_raw)) => {
+                        total_bytes = total_bytes.saturating_add(target_raw.len());
+                        Some(target_raw)
+                    }
+                    Ok(None) => {
+                        truncated = true;
+                        None
+                    }
+                    Err(_) => None,
+                }
+            }
+        };
+        let (mut headings, mut complete) = match target_raw {
+            Some(target_raw) => {
+                let outline = extract_safe_outline(&target_raw);
+                (outline.headings, !outline.truncated)
+            }
+            None => (Vec::new(), false),
+        };
+        let document_response_bytes = estimated_json_string_bytes(
+            document.source_id.len().saturating_add(target_path.len()),
+            128,
+        );
+        if document_response_bytes > remaining_response_bytes {
+            truncated = true;
+            continue;
+        }
+        remaining_response_bytes -= document_response_bytes;
+        let heading_count = headings.len();
+        headings.retain(|heading| {
+            if heading_budget_exhausted {
+                return false;
+            }
+            let bytes = heading
+                .text
+                .len()
+                .saturating_add(heading.anchor_text.len())
+                .saturating_add(heading.id.len());
+            let next = heading_string_bytes.saturating_add(bytes);
+            let response_bytes = estimated_json_string_bytes(bytes, 128);
+            if next > MAX_REFERENCE_HEADING_STRING_BYTES
+                || response_bytes > remaining_response_bytes
+            {
+                heading_budget_exhausted = true;
+                false
+            } else {
+                heading_string_bytes = next;
+                remaining_response_bytes -= response_bytes;
+                true
+            }
+        });
+        if headings.len() < heading_count {
+            complete = false;
+            truncated = true;
+        }
+        heading_documents.push(HeadingValidationDocument {
+            document: DocumentRef {
+                source_id: document.source_id.clone(),
+                path: target_path,
+            },
+            headings,
+            complete,
+        });
+    }
+    if image_problems.len() > MAX_REFERENCE_VALIDATION_ITEMS {
+        image_problems.truncate(MAX_REFERENCE_VALIDATION_ITEMS);
+        truncated = true;
+    }
+    Ok(ReferenceValidationResponse {
+        image_problems,
+        heading_references,
+        heading_documents,
+        truncated,
+    })
+}
+
+#[tauri::command]
+pub async fn get_source_reference_validation(
+    document: DocumentRef,
+    respect_gitignore: bool,
+    include_wiki_links: bool,
+    roots: State<'_, AllowedRoots>,
+    registry: State<'_, SourceRegistry>,
+) -> Result<ReferenceValidationResponse, String> {
+    let guard = ReferenceValidationGuard::acquire()?;
+    let roots = roots.inner().clone();
+    let registry = registry.inner().clone();
+    let response = tauri::async_runtime::spawn_blocking(move || {
+        build_reference_validation(
+            &document,
+            include_wiki_links,
+            respect_gitignore,
+            &roots,
+            &registry,
+        )
+    })
+    .await
+    .map_err(|error| format!("参照検証の取得に失敗しました: {error}"))?;
+    drop(guard);
+    response
 }
 
 #[tauri::command]
@@ -3071,6 +3791,264 @@ mod tests {
         assert_eq!(outgoing.total, Some(600));
         assert_eq!(incoming.total, Some(600));
         assert!(remaining < MAX_LINK_CONTEXT_BYTES);
+    }
+
+    #[test]
+    fn reference_validation_guard_rejects_concurrent_work_and_recovers() {
+        let guard = ReferenceValidationGuard::acquire().unwrap();
+        assert!(ReferenceValidationGuard::acquire().is_err());
+        drop(guard);
+        assert!(ReferenceValidationGuard::acquire().is_ok());
+    }
+
+    #[test]
+    fn same_document_wiki_anchor_recovers_after_malformed_outer_start() {
+        let (links, truncated) = extract_same_document_wiki_anchors("[[unclosed\n[[#Valid]]", 10);
+        assert!(!truncated);
+        assert_eq!(links.len(), 1);
+        assert_eq!(links[0].anchor.as_deref(), Some("Valid"));
+    }
+
+    #[test]
+    fn native_source_boundary_helper_rejects_another_allowed_root() {
+        let first = tempfile::tempdir().unwrap();
+        let second = tempfile::tempdir().unwrap();
+        let source = NativeSource {
+            root: std::fs::canonicalize(first.path()).unwrap(),
+        };
+        assert!(is_path_within_native_source(
+            &source,
+            &source.root.join("note.md")
+        ));
+        assert!(!is_path_within_native_source(
+            &source,
+            &std::fs::canonicalize(second.path())
+                .unwrap()
+                .join("note.md")
+        ));
+    }
+
+    #[test]
+    fn source_text_limit_rejects_before_decoding_contents() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::write(directory.path().join("invalid.md"), [0xff]).unwrap();
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let backend = SourceBackend::Native(NativeSource {
+            root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
+        });
+
+        assert_eq!(
+            read_source_text_with_limit(&backend, "invalid.md", &roots, None, 0).unwrap(),
+            None
+        );
+    }
+
+    #[test]
+    fn reference_validation_marks_limited_documents_incomplete_and_truncated() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::write(
+            directory.path().join("current.md"),
+            "[a](a.md#A) [b](b.md#B) [c](c.md#C)",
+        )
+        .unwrap();
+        for (path, heading) in [("a.md", "A"), ("b.md", "B"), ("c.md", "C")] {
+            std::fs::write(directory.path().join(path), format!("# {heading}\npadding")).unwrap();
+        }
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let registry = SourceRegistry::new();
+        let info = registry
+            .register_native(roots.resolve(&directory.path().to_string_lossy()).unwrap())
+            .unwrap();
+        let document = DocumentRef {
+            source_id: info.id,
+            path: "current.md".to_string(),
+        };
+
+        let document_limited = build_reference_validation_with_limits(
+            &document,
+            true,
+            false,
+            &roots,
+            &registry,
+            ReferenceValidationLimits {
+                max_documents: 2,
+                max_total_bytes: usize::MAX,
+            },
+        )
+        .unwrap();
+        assert!(document_limited.truncated);
+        assert_eq!(document_limited.heading_documents.len(), 2);
+        assert!(document_limited
+            .heading_documents
+            .iter()
+            .all(|entry| entry.complete));
+
+        let byte_limited = build_reference_validation_with_limits(
+            &document,
+            true,
+            false,
+            &roots,
+            &registry,
+            ReferenceValidationLimits {
+                max_documents: 3,
+                max_total_bytes: 51,
+            },
+        )
+        .unwrap();
+        assert!(byte_limited.truncated);
+        assert!(byte_limited
+            .heading_documents
+            .iter()
+            .any(|entry| !entry.complete));
+    }
+
+    #[test]
+    fn native_reference_validation_finds_image_and_heading_problems() {
+        let directory = tempfile::tempdir().unwrap();
+        let outside_directory = tempfile::tempdir().unwrap();
+        std::fs::create_dir(directory.path().join("guide")).unwrap();
+        std::fs::write(directory.path().join("image.png"), b"image").unwrap();
+        std::fs::write(outside_directory.path().join("outside.png"), b"image").unwrap();
+        std::fs::write(directory.path().join("target.md"), "# Exists\n").unwrap();
+        let inside_absolute = normalize_path_for_frontend(&directory.path().join("image.png"));
+        let outside_absolute =
+            normalize_path_for_frontend(&outside_directory.path().join("outside.png"));
+        std::fs::write(
+            directory.path().join("guide/current.md"),
+            format!("# Current\n\n[ok](#current) [bad](#missing) [[#Current]] [[target#Exists]] [[target#Missing]]\n\n![ok](../image.png) ![root](/image.png) ![absolute ok]({inside_absolute}) ![missing](missing.png) ![again](missing.png) ![root missing](/missing-root.png) ![outside](../../outside.png) ![absolute outside]({outside_absolute}) ![unc](//server/share/image.png) ![remote](https://example.com/image.png)"),
+        )
+        .unwrap();
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        roots
+            .register(&outside_directory.path().to_string_lossy())
+            .unwrap();
+        let registry = SourceRegistry::new();
+        let info = registry
+            .register_native(roots.resolve(&directory.path().to_string_lossy()).unwrap())
+            .unwrap();
+
+        let response = build_reference_validation(
+            &DocumentRef {
+                source_id: info.id,
+                path: "guide/current.md".to_string(),
+            },
+            true,
+            false,
+            &roots,
+            &registry,
+        )
+        .unwrap();
+
+        assert_eq!(response.image_problems.len(), 4);
+        assert!(response.image_problems.iter().any(|problem| {
+            problem.raw_target == "missing.png"
+                && problem.status == ReferenceProblemStatus::Missing
+                && problem.reference_count == 2
+        }));
+        assert!(response.image_problems.iter().any(|problem| {
+            problem.raw_target == "../../outside.png"
+                && problem.status == ReferenceProblemStatus::OutsideSource
+        }));
+        assert!(response.image_problems.iter().any(|problem| {
+            problem.raw_target == "/missing-root.png"
+                && problem.status == ReferenceProblemStatus::Missing
+        }));
+        assert!(response.image_problems.iter().any(|problem| {
+            problem.raw_target == "<absolute-path>"
+                && problem.status == ReferenceProblemStatus::OutsideSource
+                && problem.reference_count == 2
+        }));
+        assert_eq!(response.heading_references.len(), 5);
+        assert_eq!(response.heading_documents.len(), 2);
+        assert!(response
+            .heading_documents
+            .iter()
+            .all(|document| document.complete));
+        assert!(!response.truncated);
+    }
+
+    #[test]
+    fn zip_reference_validation_uses_indexed_entries_and_outlines() {
+        let directory = tempfile::tempdir().unwrap();
+        let archive_path = directory.path().join("notes.zip");
+        create_zip(
+            &archive_path,
+            &[
+                (
+                    "current.md",
+                    b"[target](target.md#Exists) ![ok](image.png) ![missing](missing.png)",
+                ),
+                ("target.md", b"# Exists\n"),
+                ("image.png", b"image"),
+            ],
+        );
+        let roots = AllowedRoots::new();
+        roots
+            .register_zip_file(&archive_path.to_string_lossy())
+            .unwrap();
+        let canonical = roots.resolve(&archive_path.to_string_lossy()).unwrap();
+        let registry = SourceRegistry::new();
+        let info = registry
+            .register_zip(build_zip_source(canonical, &roots).unwrap())
+            .unwrap();
+
+        let response = build_reference_validation(
+            &DocumentRef {
+                source_id: info.id,
+                path: "current.md".to_string(),
+            },
+            true,
+            false,
+            &roots,
+            &registry,
+        )
+        .unwrap();
+
+        assert_eq!(response.image_problems.len(), 1);
+        assert_eq!(response.image_problems[0].raw_target, "missing.png");
+        assert_eq!(
+            response.image_problems[0].status,
+            ReferenceProblemStatus::Missing
+        );
+        assert_eq!(response.heading_references.len(), 1);
+        assert_eq!(response.heading_documents[0].headings[0].text, "Exists");
+        assert!(!response.truncated);
+    }
+
+    #[test]
+    fn reference_validation_bounds_serialized_response() {
+        let directory = tempfile::tempdir().unwrap();
+        let mut markdown = "[missing](#missing)\n".to_string();
+        let large_heading = "\\\"".repeat(300);
+        for _ in 0..2_000 {
+            markdown.push_str(&format!("# {large_heading}\n"));
+        }
+        std::fs::write(directory.path().join("current.md"), markdown).unwrap();
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let registry = SourceRegistry::new();
+        let info = registry
+            .register_native(roots.resolve(&directory.path().to_string_lossy()).unwrap())
+            .unwrap();
+
+        let response = build_reference_validation(
+            &DocumentRef {
+                source_id: info.id,
+                path: "current.md".to_string(),
+            },
+            true,
+            false,
+            &roots,
+            &registry,
+        )
+        .unwrap();
+
+        assert!(response.truncated);
+        assert!(serde_json::to_vec(&response).unwrap().len() <= MAX_REFERENCE_VALIDATION_BYTES);
+        assert!(!response.heading_documents[0].complete);
     }
 
     #[test]

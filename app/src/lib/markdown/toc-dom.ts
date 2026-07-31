@@ -3,7 +3,7 @@ import {
   decodeHeadingAnchor,
   headingBaseId,
   headingInlineCodeText,
-  headingSlug,
+  headingReferenceMatches,
   uniqueHeadingId,
 } from "$lib/markdown/heading-anchor";
 
@@ -76,10 +76,9 @@ export function scrollToAnchor(contentEl: HTMLElement, hash: string): void {
   }
 
   // 3. 見出しテキストのノーマライズ比較
-  const target = headingSlug(decodedHash.replace(/^_+/, ""));
   const headings = contentEl.querySelectorAll<HTMLElement>("h1,h2,h3,h4,h5,h6");
   for (const h of headings) {
-    if (headingSlug(headingAnchorText(h)) === target) {
+    if (headingReferenceMatches(decodedHash, h.id, headingAnchorText(h))) {
       h.scrollIntoView({ behavior: "smooth" });
       return;
     }

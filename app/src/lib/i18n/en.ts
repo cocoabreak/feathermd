@@ -237,12 +237,22 @@ export const en: typeof ja = {
     sections: {
       outgoing: "Outgoing",
       incoming: "Incoming",
-      broken: "Broken Links",
+      problems: "Problems",
     },
     empty: {
       outgoing: "No links leave this document",
       incoming: "No links refer to this document",
-      broken: "No broken links",
+      problems: "No reference problems",
+    },
+    problemKinds: {
+      document: "Document",
+      image: "Image",
+      heading: "Heading",
+    },
+    problemStatuses: {
+      missing: "Not found",
+      outsideSource: "Outside the source",
+      unverifiable: "Could not verify",
     },
     wiki: "Wiki",
     markdown: "Markdown",
