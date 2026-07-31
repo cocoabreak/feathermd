@@ -3911,7 +3911,9 @@ mod tests {
         std::fs::write(directory.path().join("image.png"), b"image").unwrap();
         std::fs::write(directory.path().join("target.md"), "# Exists\n").unwrap();
         #[cfg(windows)]
-        let inside_absolute = normalize_path_for_frontend(&directory.path().join("image.png"));
+        let inside_absolute = normalize_path_for_frontend(
+            &std::fs::canonicalize(directory.path().join("image.png")).unwrap(),
+        );
         #[cfg(windows)]
         let outside_absolute = if inside_absolute.to_ascii_uppercase().starts_with("Z:") {
             "Y:/outside-feathermd/image.png"
