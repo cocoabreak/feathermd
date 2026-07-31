@@ -4,20 +4,20 @@
 
 ## T-001: 結果スキーマと固定fixture
 
-- [ ] 環境、source、build、timings、memoryを含むバージョン付きJSONスキーマを定義する
-- [ ] 個人環境情報と絶対パスを結果から除外する検証を追加する
-- [ ] `plain-v1` と `rich-v1` の決定的なMarkdown fixtureを用意する
-- [ ] fixture ID、内容、バイト数、完了判定マーカーをテストする
-- [ ] 生artifactをgitignoreへ追加する
+- [x] 環境、source、build、timings、memoryを含むバージョン付きJSONスキーマを定義する
+- [x] 個人環境情報と絶対パスを結果から除外する検証を追加する
+- [x] `plain-v1` と `rich-v1` の決定的なMarkdown fixtureを用意する
+- [x] fixture ID、内容、バイト数、完了判定マーカーをテストする
+- [x] 生artifactをgitignoreへ追加する
 
 ## T-002: Vite・配布物サイズ計測
 
-- [ ] Vite出力の全体・種別別rawサイズとBrotliサイズを収集する
-- [ ] manifestとimport graphから初期ロード集合と遅延集合を分類する
-- [ ] 解析ビルドだけperf manifestを生成し、通常productionビルドとTauri成果物へ混入しないことを検査する
-- [ ] KaTeX、Mermaid、Shiki等の主要遅延chunkを機能グループへ正規化する
-- [ ] 実行ファイル、MSI、NSIS、portable ZIPのうち指定された配布物サイズを収集する
-- [ ] 欠損、分類不能、重複chunkをfail-closedに扱うテストを追加する
+- [x] Vite出力の全体・種別別rawサイズとBrotliサイズを収集する
+- [x] manifestとimport graphから初期ロード集合と遅延集合を分類する
+- [x] 解析時だけSvelteKit内部manifestをperf manifestとしてコピーし、通常productionビルドとTauri成果物へ混入しないことを検査する
+- [x] KaTeX、Mermaid、Shiki等の主要遅延chunkを機能グループへ正規化する
+- [x] 実行ファイル、MSI、NSIS、portable ZIPのうち指定された配布物サイズを収集する
+- [x] 欠損、分類不能、重複chunkをfail-closedに扱うテストを追加する
 
 ## T-003: 隔離済みrelease WebView性能runner
 
@@ -48,7 +48,7 @@
 
 ## T-005: レポートと比較
 
-- [ ] JSONスキーマ検証とMarkdownサマリー生成を実装する
+- [x] JSONスキーマ検証とMarkdownサマリー生成を実装する
 - [ ] 同じschema、fixture、環境ID、ビルド種別のベースラインだけを比較する
 - [ ] サイズ・時間・メモリについて現在値、基準値、差分量、差分率を表示する
 - [ ] 途中失敗でも取得済み結果と失敗理由をartifactへ残す
@@ -56,12 +56,13 @@
 
 ## T-006: CIとリリースQA
 
-- [ ] Windows CIでperf manifest付き解析buildを行い、サイズ計測とartifact生成を実行する
-- [ ] サイズのJSONとMarkdownをGitHub Actions artifactへ保存する
-- [ ] 解析出力を破棄して通常production buildを再実行し、perf manifest不在を確認してからTauriをビルドする
-- [ ] 導入時はレポートのみとし、複数回の結果から自然変動を確認する
+- [x] Windows CIで通常build後にSvelteKit内部manifestを解析用コピーし、サイズ計測とartifact生成を実行する
+- [x] サイズのJSONとMarkdownをGitHub Actions artifactへ保存する
+- [x] 解析出力を破棄して通常production buildを再実行し、perf manifest不在を確認してからTauriをビルドする
+- [x] 導入時はレポートのみとする
+- [ ] 複数回の結果から自然変動を確認する
 - [ ] ベースライン確定後、初期ロードと総Vite出力の大幅回帰上限を別変更で設定する
-- [ ] 時間・メモリをhosted runnerのCIゲートへ含めない
+- [x] 時間・メモリをhosted runnerのCIゲートへ含めない
 - [ ] Windows実機のリリースQA手順へrelease計測コマンドと結果確認を追加する
 
 ## T-007: 初回ベースラインと軽量化候補
@@ -75,9 +76,9 @@
 
 ## T-008: 検証・レビュー
 
-- [ ] frontend format / lint / check / test / buildを完了する
+- [x] frontend format / lint / check / test / buildを完了する
 - [ ] Rust fmt / Clippy / testを完了する
 - [ ] Windows release実アプリで全計測シナリオを完走する
-- [ ] 計測用フック、fixture、個人環境情報がproductionバンドルへ混入しないことを確認する
-- [ ] 設計・差分レビューを完了する
-- [ ] セキュリティレビューを完了する
+- [x] 計測用フック、fixture、個人環境情報がproductionバンドルへ混入しないことを確認する
+- [x] 設計・差分レビューを完了する
+- [x] セキュリティレビューを完了する
