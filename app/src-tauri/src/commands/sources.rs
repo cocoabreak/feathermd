@@ -3907,18 +3907,17 @@ mod tests {
     #[test]
     fn native_reference_validation_finds_image_and_heading_problems() {
         let directory = tempfile::tempdir().unwrap();
-        #[cfg(windows)]
-        let outside_directory = tempfile::tempdir().unwrap();
         std::fs::create_dir(directory.path().join("guide")).unwrap();
         std::fs::write(directory.path().join("image.png"), b"image").unwrap();
-        #[cfg(windows)]
-        std::fs::write(outside_directory.path().join("outside.png"), b"image").unwrap();
         std::fs::write(directory.path().join("target.md"), "# Exists\n").unwrap();
         #[cfg(windows)]
         let inside_absolute = normalize_path_for_frontend(&directory.path().join("image.png"));
         #[cfg(windows)]
-        let outside_absolute =
-            normalize_path_for_frontend(&outside_directory.path().join("outside.png"));
+        let outside_absolute = if inside_absolute.to_ascii_uppercase().starts_with("Z:") {
+            "Y:/outside-feathermd/image.png"
+        } else {
+            "Z:/outside-feathermd/image.png"
+        };
         #[cfg(windows)]
         let absolute_images =
             format!("![absolute ok]({inside_absolute}) ![absolute outside]({outside_absolute})");
@@ -3931,10 +3930,6 @@ mod tests {
         .unwrap();
         let roots = AllowedRoots::new();
         roots.register(&directory.path().to_string_lossy()).unwrap();
-        #[cfg(windows)]
-        roots
-            .register(&outside_directory.path().to_string_lossy())
-            .unwrap();
         let registry = SourceRegistry::new();
         let info = registry
             .register_native(roots.resolve(&directory.path().to_string_lossy()).unwrap())
