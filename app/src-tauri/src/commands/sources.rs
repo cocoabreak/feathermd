@@ -3907,21 +3907,31 @@ mod tests {
     #[test]
     fn native_reference_validation_finds_image_and_heading_problems() {
         let directory = tempfile::tempdir().unwrap();
+        #[cfg(windows)]
         let outside_directory = tempfile::tempdir().unwrap();
         std::fs::create_dir(directory.path().join("guide")).unwrap();
         std::fs::write(directory.path().join("image.png"), b"image").unwrap();
+        #[cfg(windows)]
         std::fs::write(outside_directory.path().join("outside.png"), b"image").unwrap();
         std::fs::write(directory.path().join("target.md"), "# Exists\n").unwrap();
+        #[cfg(windows)]
         let inside_absolute = normalize_path_for_frontend(&directory.path().join("image.png"));
+        #[cfg(windows)]
         let outside_absolute =
             normalize_path_for_frontend(&outside_directory.path().join("outside.png"));
+        #[cfg(windows)]
+        let absolute_images =
+            format!("![absolute ok]({inside_absolute}) ![absolute outside]({outside_absolute})");
+        #[cfg(not(windows))]
+        let absolute_images = "";
         std::fs::write(
             directory.path().join("guide/current.md"),
-            format!("# Current\n\n[ok](#current) [bad](#missing) [[#Current]] [[target#Exists]] [[target#Missing]]\n\n![ok](../image.png) ![root](/image.png) ![absolute ok]({inside_absolute}) ![missing](missing.png) ![again](missing.png) ![root missing](/missing-root.png) ![outside](../../outside.png) ![absolute outside]({outside_absolute}) ![unc](//server/share/image.png) ![remote](https://example.com/image.png)"),
+            format!("# Current\n\n[ok](#current) [bad](#missing) [[#Current]] [[target#Exists]] [[target#Missing]]\n\n![ok](../image.png) ![root](/image.png) {absolute_images} ![missing](missing.png) ![again](missing.png) ![root missing](/missing-root.png) ![outside](../../outside.png) ![remote](https://example.com/image.png)"),
         )
         .unwrap();
         let roots = AllowedRoots::new();
         roots.register(&directory.path().to_string_lossy()).unwrap();
+        #[cfg(windows)]
         roots
             .register(&outside_directory.path().to_string_lossy())
             .unwrap();
@@ -3942,7 +3952,10 @@ mod tests {
         )
         .unwrap();
 
+        #[cfg(windows)]
         assert_eq!(response.image_problems.len(), 4);
+        #[cfg(not(windows))]
+        assert_eq!(response.image_problems.len(), 3);
         assert!(response.image_problems.iter().any(|problem| {
             problem.raw_target == "missing.png"
                 && problem.status == ReferenceProblemStatus::Missing
@@ -3956,10 +3969,11 @@ mod tests {
             problem.raw_target == "/missing-root.png"
                 && problem.status == ReferenceProblemStatus::Missing
         }));
+        #[cfg(windows)]
         assert!(response.image_problems.iter().any(|problem| {
             problem.raw_target == "<absolute-path>"
                 && problem.status == ReferenceProblemStatus::OutsideSource
-                && problem.reference_count == 2
+                && problem.reference_count == 1
         }));
         assert_eq!(response.heading_references.len(), 5);
         assert_eq!(response.heading_documents.len(), 2);
@@ -3968,6 +3982,42 @@ mod tests {
             .iter()
             .all(|document| document.complete));
         assert!(!response.truncated);
+    }
+
+    #[test]
+    fn native_reference_validation_anonymizes_unc_image_paths() {
+        let directory = tempfile::tempdir().unwrap();
+        std::fs::write(
+            directory.path().join("current.md"),
+            "![unc](//server/share/image.png)",
+        )
+        .unwrap();
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let registry = SourceRegistry::new();
+        let info = registry
+            .register_native(roots.resolve(&directory.path().to_string_lossy()).unwrap())
+            .unwrap();
+
+        let response = build_reference_validation(
+            &DocumentRef {
+                source_id: info.id,
+                path: "current.md".to_string(),
+            },
+            true,
+            false,
+            &roots,
+            &registry,
+        )
+        .unwrap();
+
+        assert_eq!(response.image_problems.len(), 1);
+        assert_eq!(response.image_problems[0].raw_target, "<absolute-path>");
+        assert_eq!(
+            response.image_problems[0].status,
+            ReferenceProblemStatus::OutsideSource
+        );
+        assert_eq!(response.image_problems[0].reference_count, 1);
     }
 
     #[test]
