@@ -241,12 +241,22 @@ export const ja = {
     sections: {
       outgoing: "リンク先",
       incoming: "リンク元",
-      broken: "リンク切れ",
+      problems: "問題",
     },
     empty: {
       outgoing: "この文書からのリンクはありません",
       incoming: "この文書へのリンクはありません",
-      broken: "リンク切れはありません",
+      problems: "参照の問題はありません",
+    },
+    problemKinds: {
+      document: "文書",
+      image: "画像",
+      heading: "見出し",
+    },
+    problemStatuses: {
+      missing: "見つかりません",
+      outsideSource: "ソース範囲外です",
+      unverifiable: "検証できません",
     },
     wiki: "Wiki",
     markdown: "Markdown",

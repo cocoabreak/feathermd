@@ -9,7 +9,7 @@ pub(crate) mod dialogs;
 pub(crate) mod external_editor;
 mod persistent_trust;
 pub(crate) mod readers;
-mod safe_outline;
+pub(crate) mod safe_outline;
 pub(crate) mod trusted_paths;
 
 pub use dialogs::NativeDialogState;

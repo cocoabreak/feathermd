@@ -4,6 +4,7 @@
     linkInspectorStore,
     type DocumentLinkEdge,
     type LinkContextSection,
+    type ReferenceProblem,
   } from "$lib/stores/links.svelte";
   import { settingsStore } from "$lib/stores/settings.svelte";
   import { tabStore } from "$lib/stores/tab.svelte";
@@ -11,7 +12,7 @@
   import { openLinkGraphWindow } from "$lib/link-graph-window";
   import { basename } from "$lib/utils";
 
-  type SectionName = "outgoing" | "incoming" | "broken";
+  type SectionName = "outgoing" | "incoming" | "problems";
 
   const m = $derived(i18n.m);
   const activeTab = $derived(tabStore.tabs.find((tab) => tab.id === tabStore.activeTabId));
@@ -19,7 +20,14 @@
   const wikiLinksEnabled = $derived(settingsStore.settings.renderers["wiki-links"] === true);
   let activeSection = $state<SectionName>("outgoing");
   let graphWindowError = $state<string | null>(null);
-  const section = $derived.by<LinkContextSection>(() => linkInspectorStore[activeSection]);
+  const linkSection = $derived.by<LinkContextSection>(() =>
+    activeSection === "incoming" ? linkInspectorStore.incoming : linkInspectorStore.outgoing
+  );
+  const activeItemsLength = $derived(
+    activeSection === "problems"
+      ? linkInspectorStore.problems.items.length
+      : linkInspectorStore[activeSection].items.length
+  );
 
   $effect(() => {
     void linkInspectorStore.revision;
@@ -59,6 +67,10 @@
     return sectionValue.total === null
       ? null
       : Math.max(0, sectionValue.total - sectionValue.items.length);
+  }
+
+  function problemLabel(problem: ReferenceProblem): string {
+    return problem.anchor ? `${problem.rawTarget}#${problem.anchor}` : problem.rawTarget;
   }
 </script>
 
@@ -103,7 +115,7 @@
   {/if}
 
   <div class="grid h-8 shrink-0 grid-cols-3 border-b text-xs" role="tablist">
-    {#each ["outgoing", "incoming", "broken"] as const as name}
+    {#each ["outgoing", "incoming", "problems"] as const as name}
       <button
         type="button"
         role="tab"
@@ -113,7 +125,9 @@
         class:text-foreground={activeSection === name}
         onclick={() => (activeSection = name)}
       >
-        {m.links.sections[name]} ({linkInspectorStore[name].items.length})
+        {m.links.sections[name]} ({name === activeSection
+          ? activeItemsLength
+          : linkInspectorStore[name].items.length})
       </button>
     {/each}
   </div>
@@ -134,20 +148,65 @@
           {m.links.wikiExcluded}
         </p>
       {/if}
-      {#if linkInspectorStore.truncated || omitted(section) !== 0}
+      {@const activeOmitted =
+        activeSection === "problems"
+          ? linkInspectorStore.problems.total === null
+            ? null
+            : Math.max(
+                0,
+                linkInspectorStore.problems.total - linkInspectorStore.problems.items.length
+              )
+          : omitted(linkSection)}
+      {#if linkInspectorStore.truncated || activeOmitted !== 0}
         <p class="mb-2 rounded bg-muted px-2 py-1 text-[11px] text-muted-foreground">
-          {omitted(section) === null
+          {activeOmitted === null
             ? m.links.resultsLimitedUnknown
-            : m.links.resultsLimited(omitted(section) ?? 0)}
+            : m.links.resultsLimited(activeOmitted ?? 0)}
         </p>
       {/if}
-      {#if section.items.length === 0}
+      {#if activeSection === "problems"}
+        {#if linkInspectorStore.problems.items.length === 0}
+          <p class="p-3 text-center text-xs text-muted-foreground">
+            {m.links.empty.problems}
+          </p>
+        {:else}
+          <ul class="space-y-1">
+            {#each linkInspectorStore.problems.items as problem, index (`${problem.kind}:${problem.rawTarget}:${problem.anchor}:${problem.status}:${index}`)}
+              {@const label = problemLabel(problem)}
+              <li>
+                <button
+                  type="button"
+                  class="block w-full rounded px-2 py-1.5 text-left"
+                  title={label}
+                  aria-label={`${m.links.problemKinds[problem.kind]}: ${label}, ${m.links.problemStatuses[problem.status]}`}
+                >
+                  <span class="flex items-center gap-1.5 text-xs">
+                    <AlertTriangle size={12} class="shrink-0 text-destructive" />
+                    <span class="min-w-0 flex-1 truncate font-medium text-foreground">
+                      {label}
+                    </span>
+                    <span class="shrink-0 rounded bg-muted px-1 py-0.5 text-[9px] uppercase">
+                      {m.links.problemKinds[problem.kind]}
+                    </span>
+                    <span class="shrink-0 text-[10px] text-muted-foreground">
+                      {problem.referenceCount}
+                    </span>
+                  </span>
+                  <span class="block truncate text-[11px] text-muted-foreground">
+                    {m.links.problemStatuses[problem.status]}
+                  </span>
+                </button>
+              </li>
+            {/each}
+          </ul>
+        {/if}
+      {:else if linkSection.items.length === 0}
         <p class="p-3 text-center text-xs text-muted-foreground">
           {m.links.empty[activeSection]}
         </p>
       {:else}
         <ul class="space-y-1">
-          {#each section.items as edge, index (`${edge.source.path}:${edge.target?.path}:${edge.rawTarget}:${edge.anchor}:${edge.kind}:${index}`)}
+          {#each linkSection.items as edge, index (`${edge.source.path}:${edge.target?.path}:${edge.rawTarget}:${edge.anchor}:${edge.kind}:${index}`)}
             {@const path = edgePath(edge)}
             <li>
               <svelte:element

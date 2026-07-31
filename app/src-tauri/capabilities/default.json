@@ -64,6 +64,7 @@
     "allow-resolve-source-wiki-links",
     "allow-list-source-backlinks",
     "allow-get-source-link-context",
+    "allow-get-source-reference-validation",
     "allow-check-for-updates",
     "allow-set-native-theme",
     "allow-set-menu-language",

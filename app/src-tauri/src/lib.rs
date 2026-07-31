@@ -143,6 +143,7 @@ pub fn run() {
             commands::sources::resolve_source_wiki_links,
             commands::sources::list_source_backlinks,
             commands::sources::get_source_link_context,
+            commands::sources::get_source_reference_validation,
             commands::update::check_for_updates,
             commands::menu::set_native_theme,
             commands::menu::set_menu_language,

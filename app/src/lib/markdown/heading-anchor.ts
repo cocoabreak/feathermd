@@ -80,3 +80,16 @@ export function uniqueHeadingId(base: string, usedIds: Set<string>): string {
   while (usedIds.has(id)) id = `${base}-${suffix++}`;
   return id;
 }
+
+/** 実遷移と受動検証で共有する、見出しID・代替ID・正規化テキストの照合。 */
+export function headingReferenceMatches(
+  anchor: string,
+  headingId: string,
+  headingText: string
+): boolean {
+  const decoded = decodeHeadingAnchor(anchor);
+  if (headingId === decoded) return true;
+  const alternate = decoded.startsWith("_") ? decoded.slice(1) : `_${decoded}`;
+  if (headingId === alternate) return true;
+  return headingSlug(headingText) === headingSlug(decoded.replace(/^_+/, ""));
+}
