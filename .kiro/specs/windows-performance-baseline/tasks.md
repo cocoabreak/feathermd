@@ -24,7 +24,7 @@
 - [x] 通常版と異なるidentifier・表示名だけを指定するTauri performance設定overlayを追加する
 - [x] productionフロントエンドとRust release最適化を使うperformance実行ファイルをビルドする
 - [ ] 通常版とperformance版のsettings、tabs、recent、trusted rootが相互に読み書きされない統合テストを追加する
-- [ ] performance実行ファイルをCLI引数なしで専用AppData・プロファイル・loopback CDPポートから起動する
+- [x] performance実行ファイルをCLI引数なしで専用AppData・プロファイル・loopback CDPポートから起動する
 - [x] 通常版またはperformance版の既存インスタンスを実行名とsingle-instance mutexから検出し、終了・入力せず開始前に拒否する
 - [ ] preflight後に通常版が起動した試行を背景条件違反として破棄し、通常版を終了しないテストを追加する
 - [ ] 起動PID・専用WebViewプロファイル・CDPターゲットの所有確認後だけfixtureを送る

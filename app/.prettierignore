@@ -2,5 +2,8 @@
 build
 node_modules
 perf/artifacts
+perf/windows-job-host.cs
+perf/windows-job-host.ps1
+perf/windows-job-member.ps1
 src-tauri
 coverage

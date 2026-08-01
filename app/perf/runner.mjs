@@ -8,6 +8,7 @@ import {
 
 const LOOPBACK_ADDRESS = "127.0.0.1";
 const IDENTIFIER_PATTERN = /^[a-zA-Z0-9](?:[a-zA-Z0-9.-]*[a-zA-Z0-9])?$/;
+const PREPARED_PLAN = Symbol("prepared performance launch plan");
 
 function assertWindows(platform) {
   if (platform !== "win32") {
@@ -134,6 +135,14 @@ export function preparePerformanceLaunch(
   );
   if (existing.length > 0 || existingMutex) {
     throw new Error("FeatherMD is already running; performance launch was refused");
+  }
+  Object.defineProperty(plan, PREPARED_PLAN, { value: true });
+  return plan;
+}
+
+export function assertPreparedPerformancePlan(plan) {
+  if (plan?.[PREPARED_PLAN] !== true) {
+    throw new Error("performance operation requires a successful existing-instance preflight");
   }
   return plan;
 }

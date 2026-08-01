@@ -1,0 +1,212 @@
+import { spawn, spawnSync } from "node:child_process";
+import { randomUUID } from "node:crypto";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import { assertOwnedPerformanceWorkspace } from "./run-workspace.mjs";
+import { windowsPowerShell } from "./windows-powershell.mjs";
+
+const READY_TIMEOUT_MS = 30_000;
+const EXIT_TIMEOUT_MS = 30_000;
+const FORCED_EXIT_TIMEOUT_MS = 5_000;
+const jobHostScript = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "windows-job-host.ps1"
+);
+const jobMemberScript = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "windows-job-member.ps1"
+);
+
+export function parseJobReady(line) {
+  let message;
+  try {
+    message = JSON.parse(line);
+  } catch {
+    throw new Error("Windows Job host returned invalid JSON");
+  }
+  if (!Number.isInteger(message.pid) || message.pid < 1) {
+    throw new Error("Windows Job host returned an invalid PID");
+  }
+  return message;
+}
+
+export function performanceJobHostPlan(workspace, jobName) {
+  assertOwnedPerformanceWorkspace(workspace);
+  if (!/^Local\\FeatherMD\.Performance\.[0-9a-f-]{36}$/.test(jobName)) {
+    throw new Error("performance Job name is invalid");
+  }
+  return {
+    command: windowsPowerShell,
+    args: [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      jobHostScript,
+      "-Executable",
+      workspace.command,
+      "-WorkingDirectory",
+      workspace.options.cwd,
+      "-JobName",
+      jobName,
+    ],
+    options: {
+      cwd: workspace.options.cwd,
+      env: workspace.options.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    },
+  };
+}
+
+export function queryPerformanceJobMembership(jobName, pid, execute = spawnSync) {
+  if (!/^Local\\FeatherMD\.Performance\.[0-9a-f-]{36}$/.test(jobName)) {
+    throw new Error("performance Job name is invalid");
+  }
+  if (!Number.isInteger(pid) || pid < 1) throw new Error("Job member PID is invalid");
+  const result = execute(
+    windowsPowerShell,
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      jobMemberScript,
+      "-JobName",
+      jobName,
+      "-ProcessId",
+      String(pid),
+    ],
+    { encoding: "utf8", timeout: READY_TIMEOUT_MS, windowsHide: true }
+  );
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Windows Job membership query failed (${result.status})`);
+  }
+  const value = result.stdout.trim();
+  if (value === "true") return true;
+  if (value === "false") return false;
+  throw new Error("Windows Job membership query returned an invalid result");
+}
+
+export function waitForHostExit(host, timeoutMs, stderr, { requireSuccess = true } = {}) {
+  if (host.exitCode !== null || host.signalCode !== null) {
+    if (!requireSuccess || host.exitCode === 0) return Promise.resolve();
+    const status = host.exitCode ?? `signal ${host.signalCode}`;
+    return Promise.reject(new Error(`Windows Job host shutdown failed (${status}): ${stderr}`));
+  }
+  return new Promise((resolve, reject) => {
+    const timer = globalThis.setTimeout(() => {
+      cleanup();
+      reject(new Error("Windows Job host shutdown timed out"));
+    }, timeoutMs);
+    const cleanup = () => {
+      globalThis.clearTimeout(timer);
+      host.off("error", onError);
+      host.off("exit", onExit);
+    };
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+    const onExit = (code) => {
+      cleanup();
+      if (!requireSuccess || code === 0) resolve();
+      else reject(new Error(`Windows Job host shutdown failed (${code}): ${stderr}`));
+    };
+    host.once("error", onError);
+    host.once("exit", onExit);
+  });
+}
+
+export async function launchPerformanceJob(workspace, spawnProcess = spawn) {
+  const jobName = `Local\\FeatherMD.Performance.${randomUUID()}`;
+  const plan = performanceJobHostPlan(workspace, jobName);
+  const host = spawnProcess(plan.command, plan.args, plan.options);
+  let stderr = "";
+  host.stderr.setEncoding("utf8");
+  host.stderr.on("data", (chunk) => {
+    stderr = `${stderr}${chunk}`.slice(-16_384);
+  });
+
+  let ready;
+  try {
+    ready = await new Promise((resolve, reject) => {
+      let stdout = "";
+      const timer = globalThis.setTimeout(() => {
+        reject(new Error("Windows Job host startup timed out"));
+      }, READY_TIMEOUT_MS);
+      const finish = (callback, value) => {
+        globalThis.clearTimeout(timer);
+        host.stdout.off("data", onData);
+        host.off("error", onError);
+        host.off("exit", onExit);
+        callback(value);
+      };
+      const onData = (chunk) => {
+        stdout += chunk.toString("utf8");
+        const newline = stdout.indexOf("\n");
+        if (newline < 0) return;
+        try {
+          finish(resolve, parseJobReady(stdout.slice(0, newline).trim()));
+        } catch (error) {
+          finish(reject, error);
+        }
+      };
+      const onError = (error) => finish(reject, error);
+      const onExit = (code) =>
+        finish(reject, new Error(`Windows Job host exited before ready (${code}): ${stderr}`));
+      host.stdout.on("data", onData);
+      host.once("error", onError);
+      host.once("exit", onExit);
+    });
+  } catch (error) {
+    host.stdin.end("\n");
+    host.kill();
+    try {
+      await waitForHostExit(host, FORCED_EXIT_TIMEOUT_MS, stderr, { requireSuccess: false });
+    } catch (shutdownError) {
+      const unsafeError = new AggregateError(
+        [shutdownError],
+        "Windows Job host startup failed and termination was not confirmed",
+        { cause: error }
+      );
+      unsafeError.performanceWorkspaceCleanupSafe = false;
+      throw unsafeError;
+    }
+    throw error;
+  }
+
+  let closed = false;
+  return {
+    pid: ready.pid,
+    get terminationConfirmed() {
+      return host.exitCode !== null || host.signalCode !== null;
+    },
+    contains(pid) {
+      return queryPerformanceJobMembership(jobName, pid);
+    },
+    async close() {
+      if (closed) return;
+      closed = true;
+      host.stdin.end("\n");
+      try {
+        await waitForHostExit(host, EXIT_TIMEOUT_MS, stderr);
+      } catch (error) {
+        if (host.exitCode === null && host.signalCode === null) {
+          host.kill();
+          try {
+            await waitForHostExit(host, FORCED_EXIT_TIMEOUT_MS, stderr, {
+              requireSuccess: false,
+            });
+          } catch {
+            // Report the original shutdown failure after the forced termination attempt.
+          }
+        }
+        throw error;
+      }
+    },
+  };
+}

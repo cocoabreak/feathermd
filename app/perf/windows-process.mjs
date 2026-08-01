@@ -1,5 +1,6 @@
 import { spawnSync } from "node:child_process";
 import path from "node:path";
+import { windowsPowerShell } from "./windows-powershell.mjs";
 
 const QUERY_TIMEOUT_MS = 10_000;
 
@@ -23,7 +24,45 @@ export function processIdentityQueryPlan(pid) {
     "[pscustomobject]@{ pid = [int]$process.ProcessId; parentPid = [int]$process.ParentProcessId; creationTime = $created; executablePath = [string]$process.ExecutablePath } | ConvertTo-Json -Compress",
   ].join("; ");
   return {
-    command: "powershell.exe",
+    command: windowsPowerShell,
+    args: ["-NoProfile", "-NonInteractive", "-Command", script],
+    options: {
+      encoding: "utf8",
+      timeout: QUERY_TIMEOUT_MS,
+      windowsHide: true,
+    },
+  };
+}
+
+export function processDetailsQueryPlan(pid) {
+  assertPid(pid);
+  const script = [
+    `$process = Get-CimInstance Win32_Process -Filter 'ProcessId = ${pid}'`,
+    "if ($null -eq $process) { exit 3 }",
+    "$created = $process.CreationDate.ToUniversalTime().ToString('O')",
+    "[pscustomobject]@{ pid = [int]$process.ProcessId; parentPid = [int]$process.ParentProcessId; creationTime = $created; executablePath = [string]$process.ExecutablePath; commandLine = [string]$process.CommandLine } | ConvertTo-Json -Compress",
+  ].join("; ");
+  return {
+    command: windowsPowerShell,
+    args: ["-NoProfile", "-NonInteractive", "-Command", script],
+    options: {
+      encoding: "utf8",
+      timeout: QUERY_TIMEOUT_MS,
+      windowsHide: true,
+    },
+  };
+}
+
+export function loopbackListenerQueryPlan(port) {
+  if (!Number.isInteger(port) || port < 1 || port > 65_535) {
+    throw new Error("listener port must be an integer between 1 and 65535");
+  }
+  const script = [
+    `$listeners = @(Get-NetTCPConnection -State Listen -LocalPort ${port} -ErrorAction Stop | Where-Object { $_.LocalAddress -eq '127.0.0.1' } | ForEach-Object { [int]$_.OwningProcess })`,
+    "ConvertTo-Json -Compress -InputObject $listeners",
+  ].join("; ");
+  return {
+    command: windowsPowerShell,
     args: ["-NoProfile", "-NonInteractive", "-Command", script],
     options: {
       encoding: "utf8",
@@ -49,7 +88,7 @@ export function processListQueryPlan(executableName) {
     "ConvertTo-Json -Compress -InputObject $processes",
   ].join("; ");
   return {
-    command: "powershell.exe",
+    command: windowsPowerShell,
     args: ["-NoProfile", "-NonInteractive", "-Command", script],
     options: {
       encoding: "utf8",
@@ -72,7 +111,7 @@ export function namedMutexQueryPlan(mutexName) {
     "catch [System.UnauthorizedAccessException] { exit 0 }",
   ].join("; ");
   return {
-    command: "powershell.exe",
+    command: windowsPowerShell,
     args: ["-NoProfile", "-NonInteractive", "-Command", script],
     options: {
       encoding: "utf8",
@@ -84,7 +123,7 @@ export function namedMutexQueryPlan(mutexName) {
 
 export function roamingAppDataQueryPlan() {
   return {
-    command: "powershell.exe",
+    command: windowsPowerShell,
     args: [
       "-NoProfile",
       "-NonInteractive",
@@ -130,6 +169,69 @@ export function queryProcessIdentity(pid, execute = spawnSync) {
     throw new Error(`Windows process query failed with exit code ${result.status}`);
   }
   return parseProcessIdentity(result.stdout);
+}
+
+export function queryProcessDetails(pid, execute = spawnSync) {
+  const plan = processDetailsQueryPlan(pid);
+  const result = execute(plan.command, plan.args, plan.options);
+  if (result.error) throw result.error;
+  if (result.status === 3) return null;
+  if (result.status !== 0) {
+    throw new Error(`Windows process details query failed with exit code ${result.status}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    throw new Error("Windows process details query returned invalid JSON");
+  }
+  const identity = parseProcessIdentity(JSON.stringify(parsed));
+  if (typeof parsed.commandLine !== "string" || parsed.commandLine.length === 0) {
+    throw new Error("Windows process details query returned an invalid command line");
+  }
+  return { ...identity, commandLine: parsed.commandLine };
+}
+
+export function queryLoopbackListenerOwner(port, execute = spawnSync) {
+  const plan = loopbackListenerQueryPlan(port);
+  const result = execute(plan.command, plan.args, plan.options);
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`loopback listener query failed with exit code ${result.status}`);
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch {
+    throw new Error("loopback listener query returned invalid JSON");
+  }
+  if (
+    !Array.isArray(parsed) ||
+    parsed.length !== 1 ||
+    !Number.isInteger(parsed[0]) ||
+    parsed[0] < 1
+  ) {
+    throw new Error("CDP loopback listener does not have one unambiguous owner");
+  }
+  return parsed[0];
+}
+
+export function assertOwnedCdpProcess({ appIdentity, listenerProcess, profileDir, port }) {
+  if (!appIdentity || !listenerProcess) throw new Error("CDP ownership identity is missing");
+  if (listenerProcess.parentPid !== appIdentity.pid) {
+    throw new Error("CDP listener is not a direct child of the performance app");
+  }
+  if (path.win32.basename(listenerProcess.executablePath) !== "msedgewebview2.exe") {
+    throw new Error("CDP listener is not a WebView2 process");
+  }
+  const commandLine = listenerProcess.commandLine.toLowerCase();
+  if (!commandLine.includes(`--remote-debugging-port=${port}`)) {
+    throw new Error("CDP listener command line does not contain the dedicated port");
+  }
+  if (!commandLine.includes(path.win32.normalize(profileDir).toLowerCase())) {
+    throw new Error("CDP listener command line does not contain the dedicated profile");
+  }
+  return listenerProcess;
 }
 
 export function listProcessIdentities(executableName, execute = spawnSync) {
