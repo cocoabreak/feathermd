@@ -68,9 +68,16 @@ test("materialized fixtures are bound to an owned immutable copy", () => {
   try {
     const [source] = validatePerformanceFixtures();
     const fixture = materializePerformanceFixture(workspace, source);
+    const repeat = materializePerformanceFixture(workspace, source, { variant: "repeat" });
     assert.equal(assertMaterializedPerformanceFixture(fixture), fixture);
     assert.equal(existsSync(fixture.path), true);
     assert.equal(Object.isFrozen(fixture), true);
+    assert.notEqual(fixture.path, repeat.path);
+    assert.deepEqual(readFileSync(fixture.path), readFileSync(repeat.path));
+    assert.throws(
+      () => materializePerformanceFixture(workspace, source, { variant: "invalid" }),
+      /variant/
+    );
 
     const moved = `${fixture.path}.moved`;
     renameSync(fixture.path, moved);

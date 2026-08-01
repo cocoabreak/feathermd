@@ -105,7 +105,7 @@ export async function openPerformanceFixture(workspace, jobName, fixture, spawnP
   if (
     path.win32.normalize(path.win32.dirname(fixture.path)).toLowerCase() !==
       path.win32.normalize(workspace.runDir).toLowerCase() ||
-    path.win32.basename(fixture.path) !== `fixture-${fixture.fileName}`
+    path.win32.basename(fixture.path) !== fixture.fileName
   ) {
     throw new Error("materialized performance fixture is outside the owned workspace");
   }

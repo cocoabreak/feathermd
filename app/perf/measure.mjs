@@ -11,9 +11,14 @@ import {
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
+import { performance } from "node:perf_hooks";
 import { fileURLToPath } from "node:url";
 import { WebView2Driver, findFreePort } from "../scripts/webview2-driver.mjs";
-import { waitForPerformanceFixture } from "./fixture-render.mjs";
+import {
+  startFixtureReplacementObservation,
+  waitForFixtureReplacement,
+  waitForPerformanceFixture,
+} from "./fixture-render.mjs";
 import { materializePerformanceFixture, validatePerformanceFixtures } from "./fixtures.mjs";
 import { preparePerformanceLaunch } from "./runner.mjs";
 import { cleanupPerformanceWorkspace, createPerformanceWorkspace } from "./run-workspace.mjs";
@@ -91,15 +96,39 @@ function assertFixtureLeaseProtection(file, runDirectory) {
   throw new Error("performance fixture lease allowed its run directory to be renamed");
 }
 
+function elapsedMs(start, end) {
+  const value = end - start;
+  assert.ok(Number.isFinite(value) && value >= 0, "performance duration is invalid");
+  return Number(value.toFixed(3));
+}
+
+async function waitForNewActiveTab(driver, previousTabId, expectedTitle) {
+  await driver.waitFor(
+    `(() => {
+      const active = document.querySelector("[data-tab-id].bg-background");
+      const title = active?.querySelector("[data-tab-drag-handle]")?.textContent.trim();
+      return active?.dataset.tabId !== ${JSON.stringify(previousTabId)} &&
+        title === ${JSON.stringify(expectedTitle)};
+    })()`,
+    { timeoutMs: 30_000 }
+  );
+  await driver.evaluate(
+    "new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve(true))))"
+  );
+  return driver.evaluate(
+    'document.querySelector("[data-tab-id].bg-background")?.dataset.tabId ?? null'
+  );
+}
+
 export async function finishPerformanceLaunch(
-  fixtureLease,
+  fixtureLeases,
   job,
   workspace,
   cleanupSafe,
   cleanupWorkspace = cleanupPerformanceWorkspace
 ) {
   const errors = [];
-  if (fixtureLease) {
+  for (const fixtureLease of [...fixtureLeases].reverse()) {
     try {
       await fixtureLease.release();
     } catch (error) {
@@ -136,13 +165,15 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
   const normalStoresBefore = snapshotStores(plan.normalAppDataDir);
   let workspace;
   let job;
-  let fixtureLease;
+  const fixtureLeases = [];
   let cleanupSafe = true;
   let result;
   let operationError;
   try {
     workspace = createPerformanceWorkspace(plan);
-    const materializedFixture = materializePerformanceFixture(workspace, fixture);
+    const firstFixture = materializePerformanceFixture(workspace, fixture);
+    const repeatFixture = materializePerformanceFixture(workspace, fixture, { variant: "repeat" });
+    const startupRequestedAt = performance.now();
     job = await launchPerformanceJob(workspace);
     const appIdentity = queryProcessIdentity(job.pid);
     assert.ok(appIdentity, "performance app process disappeared before identity capture");
@@ -187,15 +218,43 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
       'document.querySelector(\'[role="dialog"] [role="listbox"]\') !== null',
       { timeoutMs: 10_000 }
     );
+    const startupReadyAt = performance.now();
     assert.equal(await productionDriver.click(".picker-backdrop"), "OK");
     await productionDriver.waitFor("document.querySelector('[role=\"dialog\"]') === null", {
       timeoutMs: 10_000,
     });
-    fixtureLease = await job.openFixture(materializedFixture);
-    assertFixtureLeaseProtection(materializedFixture.path, workspace.runDir);
-    await waitForPerformanceFixture(productionDriver, materializedFixture);
-    await fixtureLease.release();
-    fixtureLease = undefined;
+    const initialTabId = await productionDriver.evaluate(
+      'document.querySelector("[data-tab-id].bg-background")?.dataset.tabId ?? null'
+    );
+    assert.equal(initialTabId, null, "performance session did not start empty");
+
+    const firstRequestedAt = performance.now();
+    const firstFixtureLease = await job.openFixture(firstFixture);
+    fixtureLeases.push(firstFixtureLease);
+    const firstTabId = await waitForNewActiveTab(
+      productionDriver,
+      initialTabId,
+      firstFixture.fileName
+    );
+    await waitForPerformanceFixture(productionDriver, firstFixture);
+    const firstRenderedAt = performance.now();
+    assertFixtureLeaseProtection(firstFixture.path, workspace.runDir);
+
+    await startFixtureReplacementObservation(productionDriver, firstFixture);
+    const repeatRequestedAt = performance.now();
+    const repeatFixtureLease = await job.openFixture(repeatFixture);
+    fixtureLeases.push(repeatFixtureLease);
+    const repeatTabId = await waitForNewActiveTab(
+      productionDriver,
+      firstTabId,
+      repeatFixture.fileName
+    );
+    assert.notEqual(repeatTabId, firstTabId, "repeat fixture reused the first tab");
+    await waitForFixtureReplacement(productionDriver);
+    await waitForPerformanceFixture(productionDriver, repeatFixture);
+    const repeatRenderedAt = performance.now();
+    assertFixtureLeaseProtection(firstFixture.path, workspace.runDir);
+    assertFixtureLeaseProtection(repeatFixture.path, workspace.runDir);
     assert.ok(readdirSync(workspace.profileDir).length > 0, "WebView profile stayed empty");
     assert.deepEqual(
       snapshotStores(plan.normalAppDataDir),
@@ -210,16 +269,23 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
       fixtureOpenedThroughCli: true,
       fixtureId: fixture.id,
       fixtureRendered: true,
+      repeatFixtureRendered: true,
       fixtureLeaseProtected: true,
       productionHookAbsent: true,
       isolatedProfileCreated: true,
       normalStoresUnchanged: true,
+      timings: {
+        startupColdMs: elapsedMs(startupRequestedAt, startupReadyAt),
+        readyToFixtureRequestMs: elapsedMs(startupReadyAt, firstRequestedAt),
+        firstRenderMs: elapsedMs(firstRequestedAt, firstRenderedAt),
+        repeatRenderMs: elapsedMs(repeatRequestedAt, repeatRenderedAt),
+      },
     };
   } catch (error) {
     if (error?.performanceWorkspaceCleanupSafe === false) cleanupSafe = false;
     operationError = error;
   }
-  const cleanupErrors = await finishPerformanceLaunch(fixtureLease, job, workspace, cleanupSafe);
+  const cleanupErrors = await finishPerformanceLaunch(fixtureLeases, job, workspace, cleanupSafe);
   const errors = operationError ? [operationError, ...cleanupErrors] : cleanupErrors;
   if (errors.length === 1) throw errors[0];
   if (errors.length > 1) throw new AggregateError(errors, "performance launch failed");

@@ -26,6 +26,8 @@ const COMPLETION_EXPRESSIONS = {
   })()`,
 };
 
+const REPLACEMENT_STATE = "__feathermdPerformanceFixtureReplacement";
+
 export function fixtureCompletionExpression(fixture) {
   assertValidatedPerformanceFixture(fixture);
   const expression = COMPLETION_EXPRESSIONS[fixture.id];
@@ -67,5 +69,44 @@ export async function waitForPerformanceFixture(driver, fixture, { timeoutMs = 3
     throw new Error(`performance fixture render timed out: ${JSON.stringify(state)}`, {
       cause: error,
     });
+  }
+}
+
+export async function startFixtureReplacementObservation(driver, fixture) {
+  assertValidatedPerformanceFixture(fixture);
+  await driver.evaluate(`(() => {
+    const marker = ${JSON.stringify(fixture.markers[0])};
+    const viewer = document.querySelector(".markdown-body");
+    if (!viewer?.textContent.includes(marker)) {
+      throw new Error("performance fixture replacement started without the first render");
+    }
+    globalThis[${JSON.stringify(REPLACEMENT_STATE)}]?.observer.disconnect();
+    const state = { removed: false };
+    const observer = new MutationObserver((records) => {
+      if (records.some((record) => Array.from(record.removedNodes)
+        .some((node) => node.textContent?.includes(marker) === true))) {
+        state.removed = true;
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    globalThis[${JSON.stringify(REPLACEMENT_STATE)}] = { observer, state };
+    return true;
+  })()`);
+}
+
+export async function waitForFixtureReplacement(driver, { timeoutMs = 30_000 } = {}) {
+  try {
+    await driver.waitFor(
+      `globalThis[${JSON.stringify(REPLACEMENT_STATE)}]?.state.removed === true`,
+      { timeoutMs }
+    );
+  } finally {
+    await driver.evaluate(`(() => {
+      const replacement = globalThis[${JSON.stringify(REPLACEMENT_STATE)}];
+      replacement?.observer.disconnect();
+      delete globalThis[${JSON.stringify(REPLACEMENT_STATE)}];
+      return true;
+    })()`);
   }
 }

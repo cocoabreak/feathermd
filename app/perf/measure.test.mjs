@@ -24,11 +24,15 @@ test("accepts only exact production Tauri origins", () => {
 });
 
 test("collects lease, Job, and workspace cleanup failures", async () => {
-  const releaseError = new Error("release failed");
+  const firstReleaseError = new Error("first release failed");
+  const repeatReleaseError = new Error("repeat release failed");
   const jobError = new Error("job failed");
   const workspaceError = new Error("workspace failed");
   const errors = await finishPerformanceLaunch(
-    { release: async () => Promise.reject(releaseError) },
+    [
+      { release: async () => Promise.reject(firstReleaseError) },
+      { release: async () => Promise.reject(repeatReleaseError) },
+    ],
     {
       terminationConfirmed: true,
       close: async () => Promise.reject(jobError),
@@ -39,7 +43,7 @@ test("collects lease, Job, and workspace cleanup failures", async () => {
       throw workspaceError;
     }
   );
-  assert.deepEqual(errors, [releaseError, jobError, workspaceError]);
+  assert.deepEqual(errors, [repeatReleaseError, firstReleaseError, jobError, workspaceError]);
 });
 
 test("keeps workspace when fixture helper termination is unconfirmed", async () => {
@@ -48,7 +52,7 @@ test("keeps workspace when fixture helper termination is unconfirmed", async () 
   unsafe.performanceWorkspaceCleanupSafe = false;
   let cleaned = false;
   const errors = await finishPerformanceLaunch(
-    { release: async () => Promise.reject(unsafe) },
+    [{ release: async () => Promise.reject(unsafe) }],
     { terminationConfirmed: true, close: async () => Promise.reject(jobError) },
     {},
     true,

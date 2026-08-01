@@ -107,9 +107,12 @@ export function assertValidatedPerformanceFixture(fixture) {
   return fixture;
 }
 
-export function materializePerformanceFixture(workspace, fixture) {
+export function materializePerformanceFixture(workspace, fixture, { variant = "first" } = {}) {
   assertOwnedPerformanceWorkspace(workspace);
   assertValidatedPerformanceFixture(fixture);
+  if (variant !== "first" && variant !== "repeat") {
+    throw new Error("performance fixture variant is invalid");
+  }
   const source = readVerifiedBytes(fixture.path, fixture, fixture.id);
   const expectedSource = validatedFixtures.get(fixture);
   if (
@@ -120,10 +123,11 @@ export function materializePerformanceFixture(workspace, fixture) {
     throw new Error("performance fixture source ownership changed");
   }
 
-  const output = path.win32.join(workspace.runDir, `fixture-${fixture.fileName}`);
+  const outputName = `${fixture.id}-${variant}.md`;
+  const output = path.win32.join(workspace.runDir, outputName);
   writeFileSync(output, source.bytes, { flag: "wx" });
   const copied = readVerifiedBytes(output, fixture, `${fixture.id} materialized copy`);
-  const materialized = immutableFixture(fixture, copied.identity.path);
+  const materialized = immutableFixture({ ...fixture, fileName: outputName }, copied.identity.path);
   validatedFixtures.set(materialized, Object.freeze(copied.identity));
   materializedFixtures.set(materialized, Object.freeze(copied.identity));
   return materialized;
