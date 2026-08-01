@@ -21,8 +21,8 @@
 
 ## T-003: 隔離済みrelease WebView性能runner
 
-- [ ] 通常版と異なるidentifier・表示名だけを指定するTauri performance設定overlayを追加する
-- [ ] productionフロントエンドとRust release最適化を使うperformance実行ファイルをビルドする
+- [x] 通常版と異なるidentifier・表示名だけを指定するTauri performance設定overlayを追加する
+- [x] productionフロントエンドとRust release最適化を使うperformance実行ファイルをビルドする
 - [ ] 通常版とperformance版のsettings、tabs、recent、trusted rootが相互に読み書きされない統合テストを追加する
 - [ ] performance実行ファイルをCLI引数なしで専用AppData・プロファイル・loopback CDPポートから起動する
 - [ ] 通常版またはperformance版の既存インスタンスを検出した場合は終了・入力せず開始前に拒否する

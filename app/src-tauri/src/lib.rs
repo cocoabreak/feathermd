@@ -152,3 +152,67 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+#[cfg(test)]
+mod app_identity_tests {
+    use std::collections::HashSet;
+    use std::path::{Path, PathBuf};
+
+    const STORE_FILES: [&str; 4] = [
+        "settings.json",
+        "tabs.json",
+        "recent.json",
+        "trusted-root.json",
+    ];
+
+    fn store_paths(app_data_root: &Path, identifier: &str) -> HashSet<PathBuf> {
+        let app_data_dir = app_data_root.join(identifier);
+        STORE_FILES
+            .iter()
+            .map(|file| app_data_dir.join(file))
+            .collect()
+    }
+
+    #[test]
+    fn performance_identifiers_keep_four_store_paths_disjoint() {
+        let base: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("base config should be valid JSON");
+        let normal_identifier = base["identifier"]
+            .as_str()
+            .expect("normal identifier should be a string");
+        let overlay: serde_json::Value =
+            serde_json::from_str(include_str!("../tauri.perf.conf.json"))
+                .expect("performance config should be valid JSON");
+        let performance_identifier = overlay["identifier"]
+            .as_str()
+            .expect("performance identifier should be a string");
+
+        assert_ne!(normal_identifier, performance_identifier);
+        let temp = tempfile::tempdir().expect("temporary app data root should be created");
+        let normal_stores = store_paths(temp.path(), normal_identifier);
+        let performance_stores = store_paths(temp.path(), performance_identifier);
+        assert!(normal_stores.is_disjoint(&performance_stores));
+
+        for normal_path in &normal_stores {
+            std::fs::create_dir_all(normal_path.parent().expect("store should have a parent"))
+                .expect("normal app data directory should be created");
+            std::fs::write(normal_path, b"normal").expect("normal store should be written");
+        }
+        for performance_path in &performance_stores {
+            std::fs::create_dir_all(
+                performance_path
+                    .parent()
+                    .expect("store should have a parent"),
+            )
+            .expect("performance app data directory should be created");
+            std::fs::write(performance_path, b"performance")
+                .expect("performance store should be written");
+        }
+        assert!(normal_stores
+            .iter()
+            .all(|path| std::fs::read(path).is_ok_and(|bytes| bytes.as_slice() == b"normal")));
+        assert!(performance_stores
+            .iter()
+            .all(|path| std::fs::read(path).is_ok_and(|bytes| bytes.as_slice() == b"performance")));
+    }
+}

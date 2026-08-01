@@ -26,6 +26,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "perf:test": "node --test perf/*.test.mjs",
+    "perf:build-app": "node perf/build-app.mjs",
     "perf:ci": "node perf/ci.mjs",
     "e2e:smoke": "node e2e/smoke.mjs",
     "e2e:check-production": "node scripts/check-e2e-production.mjs"
