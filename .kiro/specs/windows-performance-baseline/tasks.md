@@ -25,7 +25,7 @@
 - [x] productionフロントエンドとRust release最適化を使うperformance実行ファイルをビルドする
 - [ ] 通常版とperformance版のsettings、tabs、recent、trusted rootが相互に読み書きされない統合テストを追加する
 - [ ] performance実行ファイルをCLI引数なしで専用AppData・プロファイル・loopback CDPポートから起動する
-- [ ] 通常版またはperformance版の既存インスタンスを検出した場合は終了・入力せず開始前に拒否する
+- [x] 通常版またはperformance版の既存インスタンスを実行名とsingle-instance mutexから検出し、終了・入力せず開始前に拒否する
 - [ ] preflight後に通常版が起動した試行を背景条件違反として破棄し、通常版を終了しないテストを追加する
 - [ ] 起動PID・専用WebViewプロファイル・CDPターゲットの所有確認後だけfixtureを送る
 - [ ] CLI/single-instanceの既存経路でfixtureを開き、production専用フックなしで状態を観測する
