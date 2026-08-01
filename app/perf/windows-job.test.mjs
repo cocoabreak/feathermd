@@ -1,7 +1,13 @@
 import assert from "node:assert/strict";
 import { EventEmitter } from "node:events";
+import { readFileSync } from "node:fs";
 import test from "node:test";
-import { parseJobReady, queryPerformanceJobMembership, waitForHostExit } from "./windows-job.mjs";
+import {
+  openPerformanceFixture,
+  parseJobReady,
+  queryPerformanceJobMembership,
+  waitForHostExit,
+} from "./windows-job.mjs";
 
 test("parses only a valid Job-owned PID", () => {
   assert.deepEqual(parseJobReady('{"pid":4242}'), { pid: 4242 });
@@ -21,6 +27,30 @@ test("validates Job membership query results", () => {
     false
   );
   assert.throws(() => queryPerformanceJobMembership("invalid", 4242), /Job name/);
+});
+
+test("rejects fixture delivery without owned workspace", async () => {
+  const jobName = "Local\\FeatherMD.Performance.01234567-89ab-cdef-0123-456789abcdef";
+  await assert.rejects(openPerformanceFixture({}, jobName, {}), /ownership/);
+});
+
+test("native host confirms termination when Job assignment fails", () => {
+  const source = readFileSync(new URL("./windows-job-host.cs", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /TerminateUnassignedProcess[\s\S]*TerminateProcess[\s\S]*WaitForSingleObject/
+  );
+  assert.equal(source.match(/TerminateUnassignedProcess\(process\.hProcess/g)?.length, 2);
+});
+
+test("native fixture lease holds a read-only shared handle until release", () => {
+  const source = readFileSync(new URL("./windows-job-host.cs", import.meta.url), "utf8");
+  assert.match(source, /FILE_SHARE_READ/);
+  assert.match(source, /FILE_FLAG_OPEN_REPARSE_POINT/);
+  assert.match(source, /FILE_FLAG_BACKUP_SEMANTICS/);
+  assert.match(source, /GetFinalPathNameByHandle/);
+  const script = readFileSync(new URL("./windows-job-open.ps1", import.meta.url), "utf8");
+  assert.match(script, /Write-Output '\{"opened":true\}'[\s\S]*ReadLine[\s\S]*lease\.Dispose/);
 });
 
 test("distinguishes confirmed termination from successful shutdown", async () => {

@@ -2,6 +2,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertMaterializedPerformanceFixture } from "./fixtures.mjs";
 import { assertOwnedPerformanceWorkspace } from "./run-workspace.mjs";
 import { windowsPowerShell } from "./windows-powershell.mjs";
 
@@ -16,6 +17,16 @@ const jobMemberScript = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "windows-job-member.ps1"
 );
+const jobOpenScript = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "windows-job-open.ps1"
+);
+
+function assertJobName(jobName) {
+  if (!/^Local\\FeatherMD\.Performance\.[0-9a-f-]{36}$/.test(jobName)) {
+    throw new Error("performance Job name is invalid");
+  }
+}
 
 export function parseJobReady(line) {
   let message;
@@ -32,9 +43,7 @@ export function parseJobReady(line) {
 
 export function performanceJobHostPlan(workspace, jobName) {
   assertOwnedPerformanceWorkspace(workspace);
-  if (!/^Local\\FeatherMD\.Performance\.[0-9a-f-]{36}$/.test(jobName)) {
-    throw new Error("performance Job name is invalid");
-  }
+  assertJobName(jobName);
   return {
     command: windowsPowerShell,
     args: [
@@ -61,9 +70,7 @@ export function performanceJobHostPlan(workspace, jobName) {
 }
 
 export function queryPerformanceJobMembership(jobName, pid, execute = spawnSync) {
-  if (!/^Local\\FeatherMD\.Performance\.[0-9a-f-]{36}$/.test(jobName)) {
-    throw new Error("performance Job name is invalid");
-  }
+  assertJobName(jobName);
   if (!Number.isInteger(pid) || pid < 1) throw new Error("Job member PID is invalid");
   const result = execute(
     windowsPowerShell,
@@ -89,6 +96,139 @@ export function queryPerformanceJobMembership(jobName, pid, execute = spawnSync)
   if (value === "true") return true;
   if (value === "false") return false;
   throw new Error("Windows Job membership query returned an invalid result");
+}
+
+export async function openPerformanceFixture(workspace, jobName, fixture, spawnProcess = spawn) {
+  assertOwnedPerformanceWorkspace(workspace);
+  assertJobName(jobName);
+  assertMaterializedPerformanceFixture(fixture);
+  if (
+    path.win32.normalize(path.win32.dirname(fixture.path)).toLowerCase() !==
+      path.win32.normalize(workspace.runDir).toLowerCase() ||
+    path.win32.basename(fixture.path) !== `fixture-${fixture.fileName}`
+  ) {
+    throw new Error("materialized performance fixture is outside the owned workspace");
+  }
+  const host = spawnProcess(
+    windowsPowerShell,
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      jobOpenScript,
+      "-Executable",
+      workspace.command,
+      "-WorkingDirectory",
+      workspace.options.cwd,
+      "-JobName",
+      jobName,
+      "-OwnedRunDirectory",
+      workspace.runDir,
+      "-FixturePath",
+      fixture.path,
+      "-ExpectedSha256",
+      fixture.sha256,
+      "-ExpectedByteSize",
+      String(fixture.byteSize),
+    ],
+    {
+      cwd: workspace.options.cwd,
+      env: workspace.options.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    }
+  );
+  let stderr = "";
+  host.stderr.setEncoding("utf8");
+  host.stderr.on("data", (chunk) => {
+    stderr = `${stderr}${chunk}`.slice(-16_384);
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      let stdout = "";
+      const timer = globalThis.setTimeout(() => {
+        finish(reject, new Error("performance fixture sender startup timed out"));
+      }, READY_TIMEOUT_MS);
+      const finish = (callback, value) => {
+        globalThis.clearTimeout(timer);
+        host.stdout.off("data", onData);
+        host.off("error", onError);
+        host.off("exit", onExit);
+        callback(value);
+      };
+      const onData = (chunk) => {
+        stdout += chunk.toString("utf8");
+        const newline = stdout.indexOf("\n");
+        if (newline < 0) return;
+        try {
+          const response = JSON.parse(stdout.slice(0, newline).trim());
+          if (response.opened !== true) throw new Error("not opened");
+          finish(resolve);
+        } catch (error) {
+          finish(
+            reject,
+            new Error("performance fixture sender returned an invalid result", { cause: error })
+          );
+        }
+      };
+      const onError = (error) => finish(reject, error);
+      const onExit = (code) =>
+        finish(
+          reject,
+          new Error(`performance fixture sender exited before ready (${code}): ${stderr}`)
+        );
+      host.stdout.on("data", onData);
+      host.once("error", onError);
+      host.once("exit", onExit);
+    });
+  } catch (error) {
+    host.stdin.end("\n");
+    host.kill();
+    try {
+      await waitForHostExit(host, FORCED_EXIT_TIMEOUT_MS, stderr, { requireSuccess: false });
+    } catch (shutdownError) {
+      const unsafeError = new AggregateError(
+        [error, shutdownError],
+        "performance fixture sender failed and termination was not confirmed",
+        { cause: error }
+      );
+      unsafeError.performanceWorkspaceCleanupSafe = false;
+      throw unsafeError;
+    }
+    throw error;
+  }
+
+  let released = false;
+  return {
+    async release() {
+      if (released) return;
+      released = true;
+      host.stdin.end("\n");
+      try {
+        await waitForHostExit(host, READY_TIMEOUT_MS, stderr);
+      } catch (error) {
+        if (host.exitCode === null && host.signalCode === null) {
+          host.kill();
+          try {
+            await waitForHostExit(host, FORCED_EXIT_TIMEOUT_MS, stderr, {
+              requireSuccess: false,
+            });
+          } catch (shutdownError) {
+            const unsafeError = new AggregateError(
+              [error, shutdownError],
+              "performance fixture lease release failed and termination was not confirmed",
+              { cause: error }
+            );
+            unsafeError.performanceWorkspaceCleanupSafe = false;
+            throw unsafeError;
+          }
+        }
+        throw error;
+      }
+    },
+  };
 }
 
 export function waitForHostExit(host, timeoutMs, stderr, { requireSuccess = true } = {}) {
@@ -187,6 +327,9 @@ export async function launchPerformanceJob(workspace, spawnProcess = spawn) {
     },
     contains(pid) {
       return queryPerformanceJobMembership(jobName, pid);
+    },
+    openFixture(fixture) {
+      return openPerformanceFixture(workspace, jobName, fixture);
     },
     async close() {
       if (closed) return;

@@ -27,8 +27,8 @@
 - [x] performance実行ファイルをCLI引数なしで専用AppData・プロファイル・loopback CDPポートから起動する
 - [x] 通常版またはperformance版の既存インスタンスを実行名とsingle-instance mutexから検出し、終了・入力せず開始前に拒否する
 - [ ] preflight後に通常版が起動した試行を背景条件違反として破棄し、通常版を終了しないテストを追加する
-- [ ] 起動PID・専用WebViewプロファイル・CDPターゲットの所有確認後だけfixtureを送る
-- [ ] CLI/single-instanceの既存経路でfixtureを開き、production専用フックなしで状態を観測する
+- [x] 起動PID・専用WebViewプロファイル・CDPターゲットの所有確認後だけfixtureを送る
+- [x] CLI/single-instanceの既存経路でfixtureを開き、production専用フックなしで状態を観測する
 - [ ] cold/warm起動、plain初回・再表示、rich初回・再表示の完了条件を実装する
 - [ ] coldは試行ごとにprofileとAppDataを初期化し、warmは計測外priming後に再利用して、それぞれ5回の結果を保存する
 - [ ] plain/richを別suiteとして各5個の新規隔離セッションで実行し、各セッション内でfirst→同内容別名repeatの順に計測する

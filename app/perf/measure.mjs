@@ -1,10 +1,20 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import {
+  closeSync,
+  existsSync,
+  openSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  statSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { WebView2Driver, findFreePort } from "../scripts/webview2-driver.mjs";
+import { waitForPerformanceFixture } from "./fixture-render.mjs";
+import { materializePerformanceFixture, validatePerformanceFixtures } from "./fixtures.mjs";
 import { preparePerformanceLaunch } from "./runner.mjs";
 import { cleanupPerformanceWorkspace, createPerformanceWorkspace } from "./run-workspace.mjs";
 import { launchPerformanceJob } from "./windows-job.mjs";
@@ -53,21 +63,71 @@ function snapshotStores(directory) {
   );
 }
 
-async function finishPerformanceLaunch(job, workspace, cleanupSafe) {
-  let closeError;
+function isSharingViolation(error) {
+  return ["EBUSY", "EACCES", "EPERM"].includes(error.code);
+}
+
+function assertFixtureLeaseProtection(file, runDirectory) {
+  let descriptor;
+  try {
+    descriptor = openSync(file, "r+");
+  } catch (error) {
+    if (!isSharingViolation(error)) throw error;
+  } finally {
+    if (descriptor !== undefined) closeSync(descriptor);
+  }
+  if (descriptor !== undefined) {
+    throw new Error("performance fixture lease allowed a concurrent writer");
+  }
+
+  const moved = `${runDirectory}.lease-test`;
+  try {
+    renameSync(runDirectory, moved);
+  } catch (error) {
+    if (isSharingViolation(error)) return;
+    throw error;
+  }
+  renameSync(moved, runDirectory);
+  throw new Error("performance fixture lease allowed its run directory to be renamed");
+}
+
+export async function finishPerformanceLaunch(
+  fixtureLease,
+  job,
+  workspace,
+  cleanupSafe,
+  cleanupWorkspace = cleanupPerformanceWorkspace
+) {
+  const errors = [];
+  if (fixtureLease) {
+    try {
+      await fixtureLease.release();
+    } catch (error) {
+      if (error?.performanceWorkspaceCleanupSafe === false) cleanupSafe = false;
+      errors.push(error);
+    }
+  }
   if (job) {
     try {
       await job.close();
     } catch (error) {
-      cleanupSafe = job.terminationConfirmed;
-      closeError = error;
+      cleanupSafe = cleanupSafe && job.terminationConfirmed;
+      errors.push(error);
     }
   }
-  if (workspace && cleanupSafe) cleanupPerformanceWorkspace(workspace);
-  if (closeError) throw closeError;
+  if (workspace && cleanupSafe) {
+    try {
+      cleanupWorkspace(workspace);
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  return errors;
 }
 
-export async function verifyPerformanceLaunch() {
+export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
+  const fixture = validatePerformanceFixtures().find((candidate) => candidate.id === fixtureId);
+  assert.ok(fixture, `performance fixture is unavailable: ${fixtureId}`);
   const port = await findFreePort();
   const plan = preparePerformanceLaunch({
     port,
@@ -76,9 +136,13 @@ export async function verifyPerformanceLaunch() {
   const normalStoresBefore = snapshotStores(plan.normalAppDataDir);
   let workspace;
   let job;
+  let fixtureLease;
   let cleanupSafe = true;
+  let result;
+  let operationError;
   try {
     workspace = createPerformanceWorkspace(plan);
+    const materializedFixture = materializePerformanceFixture(workspace, fixture);
     job = await launchPerformanceJob(workspace);
     const appIdentity = queryProcessIdentity(job.pid);
     assert.ok(appIdentity, "performance app process disappeared before identity capture");
@@ -123,6 +187,15 @@ export async function verifyPerformanceLaunch() {
       'document.querySelector(\'[role="dialog"] [role="listbox"]\') !== null',
       { timeoutMs: 10_000 }
     );
+    assert.equal(await productionDriver.click(".picker-backdrop"), "OK");
+    await productionDriver.waitFor("document.querySelector('[role=\"dialog\"]') === null", {
+      timeoutMs: 10_000,
+    });
+    fixtureLease = await job.openFixture(materializedFixture);
+    assertFixtureLeaseProtection(materializedFixture.path, workspace.runDir);
+    await waitForPerformanceFixture(productionDriver, materializedFixture);
+    await fixtureLease.release();
+    fixtureLease = undefined;
     assert.ok(readdirSync(workspace.profileDir).length > 0, "WebView profile stayed empty");
     assert.deepEqual(
       snapshotStores(plan.normalAppDataDir),
@@ -130,23 +203,30 @@ export async function verifyPerformanceLaunch() {
       "normal FeatherMD stores changed during performance launch"
     );
 
-    return {
+    result = {
       releaseStarted: true,
       cdpConnected: true,
       cdpOwnershipVerified: true,
+      fixtureOpenedThroughCli: true,
+      fixtureId: fixture.id,
+      fixtureRendered: true,
+      fixtureLeaseProtected: true,
       productionHookAbsent: true,
       isolatedProfileCreated: true,
       normalStoresUnchanged: true,
     };
   } catch (error) {
     if (error?.performanceWorkspaceCleanupSafe === false) cleanupSafe = false;
-    throw error;
-  } finally {
-    await finishPerformanceLaunch(job, workspace, cleanupSafe);
+    operationError = error;
   }
+  const cleanupErrors = await finishPerformanceLaunch(fixtureLease, job, workspace, cleanupSafe);
+  const errors = operationError ? [operationError, ...cleanupErrors] : cleanupErrors;
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) throw new AggregateError(errors, "performance launch failed");
+  return result;
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const result = await verifyPerformanceLaunch();
+  const result = await verifyPerformanceLaunch({ fixtureId: process.argv[2] ?? "plain-v1" });
   process.stdout.write(`${JSON.stringify(result)}\n`);
 }

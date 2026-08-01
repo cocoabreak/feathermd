@@ -1,9 +1,65 @@
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import {
+  closeSync,
+  fstatSync,
+  lstatSync,
+  openSync,
+  readFileSync,
+  realpathSync,
+  writeFileSync,
+} from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { assertOwnedPerformanceWorkspace } from "./run-workspace.mjs";
 
 const fixtureDir = path.join(path.dirname(fileURLToPath(import.meta.url)), "fixtures");
+const validatedFixtures = new WeakMap();
+const materializedFixtures = new WeakMap();
+
+function immutableFixture(fixture, path) {
+  return Object.freeze({ ...fixture, markers: Object.freeze([...fixture.markers]), path });
+}
+
+function normalize(file) {
+  return path.win32.normalize(file).toLowerCase();
+}
+
+function realFile(file, label) {
+  if (!path.win32.isAbsolute(file)) throw new Error(`${label} must be absolute`);
+  const stat = lstatSync(file);
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new Error(`${label} must be a real file`);
+  const resolved = path.win32.normalize(realpathSync.native(file));
+  if (normalize(resolved) !== normalize(file)) throw new Error(`${label} path changed`);
+  return {
+    path: resolved,
+    dev: stat.dev,
+    ino: stat.ino,
+    birthtimeMs: stat.birthtimeMs,
+  };
+}
+
+function readVerifiedBytes(file, expected, label) {
+  const identity = realFile(file, label);
+  const descriptor = openSync(identity.path, "r");
+  try {
+    const opened = fstatSync(descriptor);
+    if (
+      opened.dev !== identity.dev ||
+      opened.ino !== identity.ino ||
+      opened.birthtimeMs !== identity.birthtimeMs
+    ) {
+      throw new Error(`${label} ownership changed while opening`);
+    }
+    const bytes = readFileSync(descriptor);
+    const sha256 = createHash("sha256").update(bytes).digest("hex");
+    if (bytes.length !== expected.byteSize || sha256 !== expected.sha256) {
+      throw new Error(`${label} content changed`);
+    }
+    return { bytes, identity };
+  } finally {
+    closeSync(descriptor);
+  }
+}
 
 export const PERFORMANCE_FIXTURES = [
   {
@@ -28,22 +84,63 @@ export const PERFORMANCE_FIXTURES = [
   },
 ];
 
-export function validatePerformanceFixtures(root = fixtureDir) {
+export function validatePerformanceFixtures() {
   return PERFORMANCE_FIXTURES.map((fixture) => {
-    const bytes = readFileSync(path.join(root, fixture.fileName));
+    const sourcePath = path.join(fixtureDir, fixture.fileName);
+    const { bytes, identity } = readVerifiedBytes(sourcePath, fixture, fixture.id);
     const text = bytes.toString("utf8");
-    const digest = createHash("sha256").update(bytes).digest("hex");
     if (bytes.includes(0x0d)) throw new Error(`${fixture.id} must use LF line endings`);
-    if (bytes.length !== fixture.byteSize) {
-      throw new Error(
-        `${fixture.id} byte size changed: expected ${fixture.byteSize}, got ${bytes.length}`
-      );
-    }
-    if (digest !== fixture.sha256) throw new Error(`${fixture.id} content hash changed`);
     for (const marker of fixture.markers) {
       if (!text.includes(marker)) throw new Error(`${fixture.id} is missing marker ${marker}`);
     }
     if (/https?:\/\//i.test(text)) throw new Error(`${fixture.id} must not use remote resources`);
-    return { ...fixture, path: path.join(root, fixture.fileName) };
+    const validated = immutableFixture(fixture, identity.path);
+    validatedFixtures.set(validated, Object.freeze(identity));
+    return validated;
   });
+}
+
+export function assertValidatedPerformanceFixture(fixture) {
+  if (!validatedFixtures.has(fixture)) {
+    throw new Error("performance fixture has not passed validation");
+  }
+  return fixture;
+}
+
+export function materializePerformanceFixture(workspace, fixture) {
+  assertOwnedPerformanceWorkspace(workspace);
+  assertValidatedPerformanceFixture(fixture);
+  const source = readVerifiedBytes(fixture.path, fixture, fixture.id);
+  const expectedSource = validatedFixtures.get(fixture);
+  if (
+    source.identity.dev !== expectedSource.dev ||
+    source.identity.ino !== expectedSource.ino ||
+    source.identity.birthtimeMs !== expectedSource.birthtimeMs
+  ) {
+    throw new Error("performance fixture source ownership changed");
+  }
+
+  const output = path.win32.join(workspace.runDir, `fixture-${fixture.fileName}`);
+  writeFileSync(output, source.bytes, { flag: "wx" });
+  const copied = readVerifiedBytes(output, fixture, `${fixture.id} materialized copy`);
+  const materialized = immutableFixture(fixture, copied.identity.path);
+  validatedFixtures.set(materialized, Object.freeze(copied.identity));
+  materializedFixtures.set(materialized, Object.freeze(copied.identity));
+  return materialized;
+}
+
+export function assertMaterializedPerformanceFixture(fixture) {
+  if (!materializedFixtures.has(fixture)) {
+    throw new Error("performance fixture has not been materialized");
+  }
+  const current = readVerifiedBytes(fixture.path, fixture, `${fixture.id} materialized copy`);
+  const expected = materializedFixtures.get(fixture);
+  if (
+    current.identity.dev !== expected.dev ||
+    current.identity.ino !== expected.ino ||
+    current.identity.birthtimeMs !== expected.birthtimeMs
+  ) {
+    throw new Error("materialized performance fixture ownership changed");
+  }
+  return fixture;
 }
