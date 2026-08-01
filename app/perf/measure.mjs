@@ -141,6 +141,7 @@ export async function finishPerformanceLaunch(
       await job.close();
     } catch (error) {
       cleanupSafe = cleanupSafe && job.terminationConfirmed;
+      if (!cleanupSafe) error.performanceWorkspaceCleanupSafe = false;
       errors.push(error);
     }
   }
@@ -154,25 +155,25 @@ export async function finishPerformanceLaunch(
   return errors;
 }
 
-export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
-  const fixture = validatePerformanceFixtures().find((candidate) => candidate.id === fixtureId);
-  assert.ok(fixture, `performance fixture is unavailable: ${fixtureId}`);
-  const port = await findFreePort();
-  const plan = preparePerformanceLaunch({
-    port,
-    runDir: path.win32.join(os.tmpdir(), "feathermd-performance-planned"),
-  });
-  const normalStoresBefore = snapshotStores(plan.normalAppDataDir);
-  let workspace;
+function throwPerformanceErrors(operationError, cleanupErrors, cleanupSafe) {
+  const errors = operationError ? [operationError, ...cleanupErrors] : cleanupErrors;
+  if (errors.length === 0) return;
+  const error =
+    errors.length === 1 ? errors[0] : new AggregateError(errors, "performance launch failed");
+  const workspaceCleanupSafe =
+    cleanupSafe &&
+    !errors.some((candidate) => candidate?.performanceWorkspaceCleanupSafe === false);
+  if (!workspaceCleanupSafe || cleanupErrors.length > 0) {
+    error.performanceTrialContinuationSafe = false;
+  }
+  if (!workspaceCleanupSafe) error.performanceWorkspaceCleanupSafe = false;
+  throw error;
+}
+
+export async function launchReadyPerformanceApp(workspace) {
   let job;
-  const fixtureLeases = [];
   let cleanupSafe = true;
-  let result;
-  let operationError;
   try {
-    workspace = createPerformanceWorkspace(plan);
-    const firstFixture = materializePerformanceFixture(workspace, fixture);
-    const repeatFixture = materializePerformanceFixture(workspace, fixture, { variant: "repeat" });
     const startupRequestedAt = performance.now();
     job = await launchPerformanceJob(workspace);
     const appIdentity = queryProcessIdentity(job.pid);
@@ -183,23 +184,23 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
       "Job-owned PID does not match the performance executable"
     );
 
-    const driver = new WebView2Driver({ port });
+    const driver = new WebView2Driver({ port: workspace.port });
     await driver.waitForCdp(90_000);
-    const listenerPid = queryLoopbackListenerOwner(port);
+    const listenerPid = queryLoopbackListenerOwner(workspace.port);
     assert.equal(job.contains(listenerPid), true, "CDP listener is outside the performance Job");
     const listenerProcess = queryProcessDetails(listenerPid);
     assertOwnedCdpProcess({
       appIdentity,
       listenerProcess,
       profileDir: workspace.profileDir,
-      port,
+      port: workspace.port,
     });
 
     const targets = (await driver.targets()).filter((candidate) =>
       isProductionTauriUrl(candidate.url ?? "")
     );
     assert.equal(targets.length, 1, "performance CDP target is ambiguous");
-    const productionDriver = new WebView2Driver({ port, devUrl: targets[0].url });
+    const productionDriver = new WebView2Driver({ port: workspace.port, devUrl: targets[0].url });
     await productionDriver.waitFor('document.readyState === "complete" && document.body !== null', {
       timeoutMs: 30_000,
     });
@@ -227,6 +228,61 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
       'document.querySelector("[data-tab-id].bg-background")?.dataset.tabId ?? null'
     );
     assert.equal(initialTabId, null, "performance session did not start empty");
+    return { job, productionDriver, startupRequestedAt, startupReadyAt, initialTabId };
+  } catch (error) {
+    if (error?.performanceWorkspaceCleanupSafe === false) {
+      cleanupSafe = false;
+    }
+    const cleanupErrors = await finishPerformanceLaunch([], job, undefined, cleanupSafe);
+    throwPerformanceErrors(error, cleanupErrors, cleanupSafe);
+  }
+}
+
+export async function measurePerformanceWorkspaceStartup(
+  workspace,
+  { launchReady = launchReadyPerformanceApp, finish = finishPerformanceLaunch } = {}
+) {
+  let job;
+  let result;
+  let operationError;
+  let cleanupSafe = true;
+  try {
+    const launch = await launchReady(workspace);
+    job = launch.job;
+    result = { startupMs: elapsedMs(launch.startupRequestedAt, launch.startupReadyAt) };
+  } catch (error) {
+    if (error?.performanceWorkspaceCleanupSafe === false) {
+      cleanupSafe = false;
+    }
+    operationError = error;
+  }
+  const cleanupErrors = await finish([], job, undefined, cleanupSafe);
+  throwPerformanceErrors(operationError, cleanupErrors, cleanupSafe);
+  return result;
+}
+
+export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
+  const fixture = validatePerformanceFixtures().find((candidate) => candidate.id === fixtureId);
+  assert.ok(fixture, `performance fixture is unavailable: ${fixtureId}`);
+  const port = await findFreePort();
+  const plan = preparePerformanceLaunch({
+    port,
+    runDir: path.win32.join(os.tmpdir(), "feathermd-performance-planned"),
+  });
+  const normalStoresBefore = snapshotStores(plan.normalAppDataDir);
+  let workspace;
+  let job;
+  const fixtureLeases = [];
+  let cleanupSafe = true;
+  let result;
+  let operationError;
+  try {
+    workspace = createPerformanceWorkspace(plan);
+    const firstFixture = materializePerformanceFixture(workspace, fixture);
+    const repeatFixture = materializePerformanceFixture(workspace, fixture, { variant: "repeat" });
+    const launch = await launchReadyPerformanceApp(workspace);
+    job = launch.job;
+    const { productionDriver, startupRequestedAt, startupReadyAt, initialTabId } = launch;
 
     const firstRequestedAt = performance.now();
     const firstFixtureLease = await job.openFixture(firstFixture);
@@ -282,19 +338,13 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
       },
     };
   } catch (error) {
-    if (error?.performanceWorkspaceCleanupSafe === false) cleanupSafe = false;
+    if (error?.performanceWorkspaceCleanupSafe === false) {
+      cleanupSafe = false;
+    }
     operationError = error;
   }
   const cleanupErrors = await finishPerformanceLaunch(fixtureLeases, job, workspace, cleanupSafe);
-  const errors = operationError ? [operationError, ...cleanupErrors] : cleanupErrors;
-  if (errors.length > 0) {
-    const error =
-      errors.length === 1 ? errors[0] : new AggregateError(errors, "performance launch failed");
-    if (!cleanupSafe || cleanupErrors.length > 0) {
-      error.performanceTrialContinuationSafe = false;
-    }
-    throw error;
-  }
+  throwPerformanceErrors(operationError, cleanupErrors, cleanupSafe);
   return result;
 }
 

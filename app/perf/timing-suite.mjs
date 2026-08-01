@@ -1,7 +1,16 @@
 import assert from "node:assert/strict";
 import { fileURLToPath } from "node:url";
+import os from "node:os";
 import path from "node:path";
-import { verifyPerformanceLaunch } from "./measure.mjs";
+import { findFreePort } from "../scripts/webview2-driver.mjs";
+import { measurePerformanceWorkspaceStartup, verifyPerformanceLaunch } from "./measure.mjs";
+import { preparePerformanceLaunch } from "./runner.mjs";
+import {
+  assertPerformanceWorkspaceIdentity,
+  cleanupPerformanceWorkspace,
+  createPerformanceWorkspace,
+} from "./run-workspace.mjs";
+import { acquirePerformanceWorkspaceLease } from "./windows-job.mjs";
 
 export const DEFAULT_TIMING_TRIALS = 5;
 
@@ -157,6 +166,133 @@ export async function runColdTimingSuites(options = {}) {
   };
 }
 
+export async function runWarmStartupSuite({
+  trialCount = DEFAULT_TIMING_TRIALS,
+  measureStartup = measurePerformanceWorkspaceStartup,
+  allocatePort = findFreePort,
+  prepareLaunch = preparePerformanceLaunch,
+  createWorkspace = createPerformanceWorkspace,
+  cleanupWorkspace = cleanupPerformanceWorkspace,
+  assertWorkspaceIdentity = assertPerformanceWorkspaceIdentity,
+  acquireWorkspaceLease = acquirePerformanceWorkspaceLease,
+  signal,
+} = {}) {
+  assertTrialCount(trialCount);
+  const trials = [];
+  const values = [];
+  let workspace;
+  let workspaceLease;
+  let primed = false;
+  let continuationSafe = true;
+  let workspaceCleanupSafe = true;
+  let setupFailure;
+  if (signal?.aborted) {
+    return {
+      primed: false,
+      expectedTrials: trialCount,
+      trials,
+      interrupted: true,
+      continuationSafe: true,
+      timings: [
+        { scenario: "startup-warm", status: "failed", error: `0/${trialCount} trials succeeded` },
+      ],
+    };
+  }
+  try {
+    const port = await allocatePort();
+    if (signal?.aborted) throw new Error("performance warm suite was interrupted");
+    const plan = prepareLaunch({
+      port,
+      runDir: path.win32.join(os.tmpdir(), "feathermd-performance-warm-planned"),
+    });
+    workspace = createWorkspace(plan);
+    assertWorkspaceIdentity(workspace);
+    workspaceLease = await acquireWorkspaceLease(workspace);
+    assertWorkspaceIdentity(workspace);
+    if (signal?.aborted) throw new Error("performance warm suite was interrupted");
+    prepareLaunch({ port: workspace.port, runDir: workspace.runDir });
+    await measureStartup(workspace);
+    primed = true;
+
+    for (let index = 0; index < trialCount && !signal?.aborted; index += 1) {
+      try {
+        prepareLaunch({ port: workspace.port, runDir: workspace.runDir });
+        const result = await measureStartup(workspace);
+        assertTimingValue(result?.startupMs, `startup-warm[${index}]`);
+        values.push(result.startupMs);
+        trials.push({ trial: index + 1, status: "measured" });
+      } catch (error) {
+        workspaceCleanupSafe = error?.performanceWorkspaceCleanupSafe !== false;
+        continuationSafe =
+          workspaceCleanupSafe && error?.performanceTrialContinuationSafe !== false;
+        trials.push({ trial: index + 1, status: "failed", reason: failureReason(error) });
+        if (!continuationSafe) break;
+      }
+    }
+  } catch (error) {
+    workspaceCleanupSafe = error?.performanceWorkspaceCleanupSafe !== false;
+    continuationSafe = workspaceCleanupSafe && error?.performanceTrialContinuationSafe !== false;
+    setupFailure = failureReason(error);
+  } finally {
+    if (workspaceLease) {
+      try {
+        await workspaceLease.release();
+      } catch (error) {
+        continuationSafe = false;
+        workspaceCleanupSafe = false;
+        setupFailure ??= failureReason(error);
+      }
+    }
+    if (workspace && workspaceCleanupSafe) {
+      try {
+        cleanupWorkspace(workspace);
+      } catch (error) {
+        continuationSafe = false;
+        setupFailure ??= failureReason(error);
+      }
+    }
+  }
+
+  const complete =
+    primed &&
+    values.length === trialCount &&
+    trials.length === trialCount &&
+    !signal?.aborted &&
+    continuationSafe;
+  return {
+    primed,
+    expectedTrials: trialCount,
+    trials,
+    interrupted: signal?.aborted === true,
+    continuationSafe,
+    ...(setupFailure ? { setupFailure } : {}),
+    timings: [
+      complete
+        ? summarizeTimingTrials("startup-warm", values, { expectedTrials: trialCount })
+        : {
+            scenario: "startup-warm",
+            status: "failed",
+            error: `${values.length}/${trialCount} trials succeeded`,
+          },
+    ],
+  };
+}
+
+export async function runTimingSuites(options = {}) {
+  const cold = await runColdTimingSuites(options);
+  const suites = [...cold.suites];
+  if (!cold.interrupted && cold.continuationSafe) {
+    suites.push(await runWarmStartupSuite(options));
+  }
+  return {
+    trialCount: cold.trialCount,
+    interrupted: suites.some((suite) => suite.interrupted),
+    continuationSafe: suites.every((suite) => suite.continuationSafe),
+    suites,
+    timings: suites.flatMap((suite) => suite.timings),
+  };
+}
+
 async function runCli() {
   const controller = new AbortController();
   let signalExitCode = 0;
@@ -171,7 +307,7 @@ async function runCli() {
   process.once("SIGINT", onInterrupt);
   process.once("SIGTERM", onTerminate);
   try {
-    const result = await runColdTimingSuites({ signal: controller.signal });
+    const result = await runTimingSuites({ signal: controller.signal });
     process.stdout.write(`${JSON.stringify(result)}\n`);
     if (result.interrupted) process.exitCode = signalExitCode || 1;
     else if (

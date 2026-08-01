@@ -21,6 +21,10 @@ const jobOpenScript = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
   "windows-job-open.ps1"
 );
+const workspaceLeaseScript = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "windows-workspace-lease.ps1"
+);
 
 function assertJobName(jobName) {
   if (!/^Local\\FeatherMD\.Performance\.[0-9a-f-]{36}$/.test(jobName)) {
@@ -226,6 +230,111 @@ export async function openPerformanceFixture(workspace, jobName, fixture, spawnP
           }
         }
         throw error;
+      }
+    },
+  };
+}
+
+export async function acquirePerformanceWorkspaceLease(workspace, spawnProcess = spawn) {
+  assertOwnedPerformanceWorkspace(workspace);
+  const host = spawnProcess(
+    windowsPowerShell,
+    [
+      "-NoProfile",
+      "-NonInteractive",
+      "-ExecutionPolicy",
+      "Bypass",
+      "-File",
+      workspaceLeaseScript,
+      "-RunDirectory",
+      workspace.runDir,
+      "-ProfileDirectory",
+      workspace.profileDir,
+      "-AppDataDirectory",
+      workspace.performanceAppDataDir,
+    ],
+    {
+      cwd: workspace.options.cwd,
+      env: workspace.options.env,
+      stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
+    }
+  );
+  let stderr = "";
+  host.stderr.setEncoding("utf8");
+  host.stderr.on("data", (chunk) => {
+    stderr = `${stderr}${chunk}`.slice(-16_384);
+  });
+  try {
+    await new Promise((resolve, reject) => {
+      let stdout = "";
+      const timer = globalThis.setTimeout(
+        () => finish(reject, new Error("performance workspace lease startup timed out")),
+        READY_TIMEOUT_MS
+      );
+      const finish = (callback, value) => {
+        globalThis.clearTimeout(timer);
+        host.stdout.off("data", onData);
+        host.off("error", onError);
+        host.off("exit", onExit);
+        callback(value);
+      };
+      const onData = (chunk) => {
+        stdout += chunk.toString("utf8");
+        const newline = stdout.indexOf("\n");
+        if (newline < 0) return;
+        try {
+          const response = JSON.parse(stdout.slice(0, newline).trim());
+          if (response.leased !== true) throw new Error("not leased");
+          finish(resolve);
+        } catch (error) {
+          finish(
+            reject,
+            new Error("performance workspace lease returned an invalid result", { cause: error })
+          );
+        }
+      };
+      const onError = (error) => finish(reject, error);
+      const onExit = (code) =>
+        finish(
+          reject,
+          new Error(`performance workspace lease exited before ready (${code}): ${stderr}`)
+        );
+      host.stdout.on("data", onData);
+      host.once("error", onError);
+      host.once("exit", onExit);
+    });
+  } catch (error) {
+    host.stdin.end("\n");
+    host.kill();
+    try {
+      await waitForHostExit(host, FORCED_EXIT_TIMEOUT_MS, stderr, { requireSuccess: false });
+    } catch (shutdownError) {
+      const unsafeError = new AggregateError(
+        [error, shutdownError],
+        "performance workspace lease failed and termination was not confirmed"
+      );
+      unsafeError.performanceWorkspaceCleanupSafe = false;
+      throw unsafeError;
+    }
+    throw error;
+  }
+
+  let released = false;
+  return {
+    async release() {
+      if (released) return;
+      released = true;
+      host.stdin.end("\n");
+      try {
+        await waitForHostExit(host, READY_TIMEOUT_MS, stderr);
+      } catch (error) {
+        if (host.exitCode === null && host.signalCode === null) host.kill();
+        const unsafeError = new Error("performance workspace lease release failed", {
+          cause: error,
+        });
+        unsafeError.performanceWorkspaceCleanupSafe = false;
+        throw unsafeError;
       }
     },
   };

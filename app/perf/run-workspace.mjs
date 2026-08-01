@@ -193,3 +193,16 @@ export function assertOwnedPerformanceWorkspace(workspace) {
   }
   return workspace;
 }
+
+export function assertPerformanceWorkspaceIdentity(workspace) {
+  assertOwnedPerformanceWorkspace(workspace);
+  const { ownership } = workspace;
+  assertSameDirectory(workspace.runDir, ownership.runDir, "performance run directory");
+  assertSameDirectory(workspace.profileDir, ownership.profileDir, "WebView profile");
+  assertSameDirectory(
+    workspace.performanceAppDataDir,
+    ownership.performanceAppDataDir,
+    "performance AppData"
+  );
+  return workspace;
+}

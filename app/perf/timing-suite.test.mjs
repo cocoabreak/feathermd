@@ -3,6 +3,7 @@ import test from "node:test";
 import {
   runColdTimingSuites,
   runFixtureTimingSuite,
+  runWarmStartupSuite,
   summarizeTimingTrials,
 } from "./timing-suite.mjs";
 
@@ -177,4 +178,173 @@ test("keeps plain and rich in separate suites", async () => {
       "repeat-render-rich",
     ]
   );
+});
+
+test("primes once and measures five launches in one reusable warm workspace", async () => {
+  const workspace = { port: 41_238, runDir: "C:\\temp\\warm-owned" };
+  const seenWorkspaces = [];
+  const preflights = [];
+  let cleanupCalls = 0;
+  let leaseReleaseCalls = 0;
+  const suite = await runWarmStartupSuite({
+    trialCount: 5,
+    allocatePort: async () => workspace.port,
+    prepareLaunch: (options) => {
+      preflights.push(options);
+      return { prepared: true };
+    },
+    createWorkspace: () => workspace,
+    assertWorkspaceIdentity: (actualWorkspace) => assert.equal(actualWorkspace, workspace),
+    acquireWorkspaceLease: async (actualWorkspace) => {
+      assert.equal(actualWorkspace, workspace);
+      return {
+        release: async () => {
+          leaseReleaseCalls += 1;
+        },
+      };
+    },
+    measureStartup: async (actualWorkspace) => {
+      seenWorkspaces.push(actualWorkspace);
+      return { startupMs: 100 + seenWorkspaces.length };
+    },
+    cleanupWorkspace: (actualWorkspace) => {
+      assert.equal(actualWorkspace, workspace);
+      cleanupCalls += 1;
+    },
+  });
+  assert.equal(suite.primed, true);
+  assert.equal(seenWorkspaces.length, 6);
+  assert.ok(seenWorkspaces.every((value) => value === workspace));
+  assert.equal(preflights.length, 7);
+  assert.equal(cleanupCalls, 1);
+  assert.equal(leaseReleaseCalls, 1);
+  assert.deepEqual(suite.timings[0].trials, [102, 103, 104, 105, 106]);
+});
+
+test("does not report warm timing when priming fails", async () => {
+  let cleanupCalls = 0;
+  const suite = await runWarmStartupSuite({
+    trialCount: 2,
+    allocatePort: async () => 41_239,
+    prepareLaunch: () => ({ prepared: true }),
+    createWorkspace: () => ({ port: 41_239, runDir: "C:\\temp\\warm-owned" }),
+    assertWorkspaceIdentity: () => {},
+    acquireWorkspaceLease: async () => ({ release: async () => {} }),
+    measureStartup: async () => {
+      throw new Error("injected priming failure");
+    },
+    cleanupWorkspace: () => {
+      cleanupCalls += 1;
+    },
+  });
+  assert.equal(cleanupCalls, 1);
+  assert.equal(suite.primed, false);
+  assert.equal(suite.trials.length, 0);
+  assert.equal(suite.timings[0].status, "failed");
+});
+
+test("does not launch warm priming when already interrupted", async () => {
+  const controller = new AbortController();
+  controller.abort();
+  let startupCalls = 0;
+  const suite = await runWarmStartupSuite({
+    trialCount: 2,
+    signal: controller.signal,
+    measureStartup: async () => {
+      startupCalls += 1;
+    },
+  });
+  assert.equal(startupCalls, 0);
+  assert.equal(suite.interrupted, true);
+  assert.equal(suite.primed, false);
+});
+
+test("releases the directory lease but preserves workspace after unsafe shutdown", async () => {
+  const workspace = { port: 41_240, runDir: "C:\\temp\\warm-owned" };
+  let startupCalls = 0;
+  let leaseReleaseCalls = 0;
+  let cleanupCalls = 0;
+  const suite = await runWarmStartupSuite({
+    trialCount: 2,
+    allocatePort: async () => workspace.port,
+    prepareLaunch: () => ({ prepared: true }),
+    createWorkspace: () => workspace,
+    assertWorkspaceIdentity: () => {},
+    acquireWorkspaceLease: async () => ({
+      release: async () => {
+        leaseReleaseCalls += 1;
+      },
+    }),
+    measureStartup: async () => {
+      startupCalls += 1;
+      if (startupCalls === 1) return { startupMs: 100 };
+      const error = new Error("injected unsafe shutdown");
+      error.performanceTrialContinuationSafe = false;
+      error.performanceWorkspaceCleanupSafe = false;
+      throw error;
+    },
+    cleanupWorkspace: () => {
+      cleanupCalls += 1;
+    },
+  });
+  assert.equal(startupCalls, 2);
+  assert.equal(leaseReleaseCalls, 1);
+  assert.equal(cleanupCalls, 0);
+  assert.equal(suite.continuationSafe, false);
+});
+
+test("preserves workspace when lease acquisition termination is unconfirmed", async () => {
+  const workspace = { port: 41_241, runDir: "C:\\temp\\warm-owned" };
+  let startupCalls = 0;
+  let cleanupCalls = 0;
+  const suite = await runWarmStartupSuite({
+    trialCount: 2,
+    allocatePort: async () => workspace.port,
+    prepareLaunch: () => ({ prepared: true }),
+    createWorkspace: () => workspace,
+    assertWorkspaceIdentity: () => {},
+    acquireWorkspaceLease: async () => {
+      const error = new Error("injected unconfirmed lease termination");
+      error.performanceWorkspaceCleanupSafe = false;
+      throw error;
+    },
+    measureStartup: async () => {
+      startupCalls += 1;
+    },
+    cleanupWorkspace: () => {
+      cleanupCalls += 1;
+    },
+  });
+  assert.equal(startupCalls, 0);
+  assert.equal(cleanupCalls, 0);
+  assert.equal(suite.continuationSafe, false);
+  assert.equal(suite.setupFailure, "Error");
+});
+
+test("cleans workspace when trial continuation is unsafe but cleanup is safe", async () => {
+  const workspace = { port: 41_242, runDir: "C:\\temp\\warm-owned" };
+  let startupCalls = 0;
+  let cleanupCalls = 0;
+  const suite = await runWarmStartupSuite({
+    trialCount: 2,
+    allocatePort: async () => workspace.port,
+    prepareLaunch: () => ({ prepared: true }),
+    createWorkspace: () => workspace,
+    assertWorkspaceIdentity: () => {},
+    acquireWorkspaceLease: async () => ({ release: async () => {} }),
+    measureStartup: async () => {
+      startupCalls += 1;
+      if (startupCalls === 1) return { startupMs: 100 };
+      const error = new Error("injected confirmed shutdown failure");
+      error.performanceTrialContinuationSafe = false;
+      error.performanceWorkspaceCleanupSafe = true;
+      throw error;
+    },
+    cleanupWorkspace: () => {
+      cleanupCalls += 1;
+    },
+  });
+  assert.equal(startupCalls, 2);
+  assert.equal(cleanupCalls, 1);
+  assert.equal(suite.continuationSafe, false);
 });

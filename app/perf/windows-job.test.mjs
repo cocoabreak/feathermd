@@ -3,6 +3,7 @@ import { EventEmitter } from "node:events";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
+  acquirePerformanceWorkspaceLease,
   openPerformanceFixture,
   parseJobReady,
   queryPerformanceJobMembership,
@@ -34,6 +35,10 @@ test("rejects fixture delivery without owned workspace", async () => {
   await assert.rejects(openPerformanceFixture({}, jobName, {}), /ownership/);
 });
 
+test("rejects workspace lease acquisition without owned workspace", async () => {
+  await assert.rejects(acquirePerformanceWorkspaceLease({}), /ownership/);
+});
+
 test("native host confirms termination when Job assignment fails", () => {
   const source = readFileSync(new URL("./windows-job-host.cs", import.meta.url), "utf8");
   assert.match(
@@ -51,6 +56,16 @@ test("native fixture lease holds a read-only shared handle until release", () =>
   assert.match(source, /GetFinalPathNameByHandle/);
   const script = readFileSync(new URL("./windows-job-open.ps1", import.meta.url), "utf8");
   assert.match(script, /Write-Output '\{"opened":true\}'[\s\S]*ReadLine[\s\S]*lease\.Dispose/);
+});
+
+test("native workspace lease holds all non-reparse directories until release", () => {
+  const source = readFileSync(new URL("./windows-job-host.cs", import.meta.url), "utf8");
+  assert.match(source, /OpenWorkspaceAndHold/);
+  assert.match(source, /OpenVerifiedPath\(expectedRun, true\)/);
+  assert.match(source, /OpenVerifiedPath\(expectedProfile, true\)/);
+  assert.match(source, /OpenVerifiedPath\(appDataDirectory, true\)/);
+  const script = readFileSync(new URL("./windows-workspace-lease.ps1", import.meta.url), "utf8");
+  assert.match(script, /Write-Output '\{"leased":true\}'[\s\S]*ReadLine[\s\S]*lease\.Dispose/);
 });
 
 test("distinguishes confirmed termination from successful shutdown", async () => {

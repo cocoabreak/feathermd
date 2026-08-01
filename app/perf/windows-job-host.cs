@@ -32,6 +32,26 @@ public sealed class PerformanceFixtureLease : IDisposable
     }
 }
 
+public sealed class PerformanceWorkspaceLease : IDisposable
+{
+    private SafeFileHandle[] handles;
+
+    public PerformanceWorkspaceLease(SafeFileHandle[] handles)
+    {
+        this.handles = handles;
+    }
+
+    public void Dispose()
+    {
+        if (handles == null) return;
+        foreach (var handle in handles)
+        {
+            if (handle != null) handle.Dispose();
+        }
+        handles = null;
+    }
+}
+
 public static class PerformanceJobHost
 {
     private const uint CREATE_SUSPENDED = 0x00000004;
@@ -300,6 +320,43 @@ public static class PerformanceJobHost
         if (WaitForSingleObject(process, INFINITE) != WAIT_OBJECT_0)
         {
             throw new AggregateException(cause, Error("WaitForSingleObject failed"));
+        }
+    }
+
+    public static PerformanceWorkspaceLease OpenWorkspaceAndHold(
+        string runDirectory,
+        string profileDirectory,
+        string appDataDirectory)
+    {
+        var expectedRun = Path.GetFullPath(runDirectory).TrimEnd(Path.DirectorySeparatorChar);
+        var expectedProfile = Path.GetFullPath(profileDirectory).TrimEnd(Path.DirectorySeparatorChar);
+        if (!String.Equals(
+            Path.GetDirectoryName(expectedProfile),
+            expectedRun,
+            StringComparison.OrdinalIgnoreCase))
+        {
+            throw new IOException("performance profile is outside the owned run directory");
+        }
+
+        var handles = new SafeFileHandle[3];
+        try
+        {
+            handles[0] = OpenVerifiedPath(expectedRun, true);
+            handles[1] = OpenVerifiedPath(expectedProfile, true);
+            handles[2] = OpenVerifiedPath(appDataDirectory, true);
+            var lease = new PerformanceWorkspaceLease(handles);
+            handles = null;
+            return lease;
+        }
+        finally
+        {
+            if (handles != null)
+            {
+                foreach (var handle in handles)
+                {
+                    if (handle != null) handle.Dispose();
+                }
+            }
         }
     }
 
