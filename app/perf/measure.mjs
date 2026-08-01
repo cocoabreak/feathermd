@@ -287,8 +287,14 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
   }
   const cleanupErrors = await finishPerformanceLaunch(fixtureLeases, job, workspace, cleanupSafe);
   const errors = operationError ? [operationError, ...cleanupErrors] : cleanupErrors;
-  if (errors.length === 1) throw errors[0];
-  if (errors.length > 1) throw new AggregateError(errors, "performance launch failed");
+  if (errors.length > 0) {
+    const error =
+      errors.length === 1 ? errors[0] : new AggregateError(errors, "performance launch failed");
+    if (!cleanupSafe || cleanupErrors.length > 0) {
+      error.performanceTrialContinuationSafe = false;
+    }
+    throw error;
+  }
   return result;
 }
 

@@ -55,7 +55,7 @@ function assertDirectChild(parent, child, expectedName, label) {
 
 export function createPerformanceWorkspace(
   plan,
-  { tempRoot = os.tmpdir(), writeSettings = writeFileSync } = {}
+  { tempRoot = os.tmpdir(), writeSettings = writeFileSync, remove = rmSync } = {}
 ) {
   assertPreparedPerformancePlan(plan);
   const realTemp = realDirectory(tempRoot, "temporary root");
@@ -107,15 +107,21 @@ export function createPerformanceWorkspace(
       if (!directory || !identity) continue;
       try {
         assertSameDirectory(directory, identity, label);
-        rmSync(directory, { recursive: true, maxRetries: 10, retryDelay: 200 });
+        remove(directory, { recursive: true, maxRetries: 10, retryDelay: 180 });
       } catch (cleanupError) {
         cleanupErrors.push(cleanupError);
       }
     }
     if (cleanupErrors.length > 0) {
-      throw new AggregateError(cleanupErrors, "performance workspace rollback failed", {
-        cause: error,
-      });
+      const rollbackError = new AggregateError(
+        cleanupErrors,
+        "performance workspace rollback failed",
+        {
+          cause: error,
+        }
+      );
+      rollbackError.performanceTrialContinuationSafe = false;
+      throw rollbackError;
     }
     throw error;
   }
@@ -143,7 +149,7 @@ export function createPerformanceWorkspace(
   };
 }
 
-export function cleanupPerformanceWorkspace(workspace) {
+export function cleanupPerformanceWorkspace(workspace, { remove = rmSync } = {}) {
   if (workspace?.[WORKSPACE_OWNERSHIP] !== true) {
     throw new Error("performance workspace ownership is missing");
   }
@@ -167,12 +173,18 @@ export function cleanupPerformanceWorkspace(workspace) {
     workspace.performanceIdentifier,
     "performance AppData"
   );
-  rmSync(workspace.runDir, { recursive: true, maxRetries: 10, retryDelay: 200 });
-  rmSync(workspace.performanceAppDataDir, {
-    recursive: true,
-    maxRetries: 10,
-    retryDelay: 200,
-  });
+  const errors = [];
+  for (const directory of [workspace.runDir, workspace.performanceAppDataDir]) {
+    try {
+      remove(directory, { recursive: true, maxRetries: 10, retryDelay: 180 });
+    } catch (error) {
+      errors.push(error);
+    }
+  }
+  if (errors.length === 1) throw errors[0];
+  if (errors.length > 1) {
+    throw new AggregateError(errors, "performance workspace cleanup failed");
+  }
 }
 
 export function assertOwnedPerformanceWorkspace(workspace) {

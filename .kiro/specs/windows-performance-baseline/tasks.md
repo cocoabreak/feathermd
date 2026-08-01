@@ -31,8 +31,8 @@
 - [x] CLI/single-instanceの既存経路でfixtureを開き、production専用フックなしで状態を観測する
 - [ ] cold/warm起動、plain初回・再表示、rich初回・再表示の完了条件を実装する
 - [ ] coldは試行ごとにprofileとAppDataを初期化し、warmは計測外priming後に再利用して、それぞれ5回の結果を保存する
-- [ ] plain/richを別suiteとして各5個の新規隔離セッションで実行し、各セッション内でfirst→同内容別名repeatの順に計測する
-- [ ] 空状態ready直後にfixtureを送り、要求までの遅延と別suite由来キャッシュが混入しないことを検査する
+- [x] plain/richを別suiteとして各5個の新規隔離セッションで実行し、各セッション内でfirst→同内容別名repeatの順に計測する
+- [x] 空状態ready直後にfixtureを送り、要求までの遅延と別suite由来キャッシュが混入しないことを検査する
 - [ ] タイムアウト、試行不足、異常終了を失敗として記録する
 - [ ] 起動時のPID、作成時刻、実行ファイル、親子関係を保持し、終了直前にidentityを再検証する
 - [ ] PID再利用、主PID消失、起動競合時に、所有を確認できないPIDを終了しないテストを追加する

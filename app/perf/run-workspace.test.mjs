@@ -44,6 +44,33 @@ test("creates and removes owned profile and performance AppData", () => {
   }
 });
 
+test("attempts both owned cleanup targets when the first removal fails", () => {
+  const { root, temp, plan } = fixture();
+  try {
+    const workspace = createPerformanceWorkspace(plan, { tempRoot: temp });
+    const attempted = [];
+    assert.throws(
+      () =>
+        cleanupPerformanceWorkspace(workspace, {
+          remove: (directory, options) => {
+            attempted.push({ directory, options });
+            throw new Error(`injected cleanup failure ${attempted.length}`);
+          },
+        }),
+      AggregateError
+    );
+    assert.deepEqual(
+      attempted.map(({ directory }) => directory),
+      [workspace.runDir, workspace.performanceAppDataDir]
+    );
+    assert.ok(
+      attempted.every(({ options }) => options.maxRetries === 10 && options.retryDelay === 180)
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test("refuses cleanup after an owned directory is replaced", () => {
   const { root, temp, plan } = fixture();
   try {
@@ -94,6 +121,30 @@ test("rolls back owned directories when settings initialization fails", () => {
     );
     assert.deepEqual(readdirSync(temp), []);
     assert.equal(existsSync(plan.performanceAppDataDir), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("marks a workspace rollback failure unsafe for later trials", () => {
+  const { root, temp, plan } = fixture();
+  try {
+    let error;
+    try {
+      createPerformanceWorkspace(plan, {
+        tempRoot: temp,
+        writeSettings: () => {
+          throw new Error("injected settings failure");
+        },
+        remove: () => {
+          throw new Error("injected rollback failure");
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.performanceTrialContinuationSafe, false);
   } finally {
     rmSync(root, { recursive: true, force: true });
   }
