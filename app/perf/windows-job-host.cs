@@ -1,10 +1,12 @@
 using System;
 using System.ComponentModel;
+using System.Diagnostics;
 using System.IO;
 using Microsoft.Win32.SafeHandles;
 using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
+using System.Threading;
 
 public sealed class PerformanceFixtureLease : IDisposable
 {
@@ -57,6 +59,8 @@ public static class PerformanceJobHost
     private const uint CREATE_SUSPENDED = 0x00000004;
     private const uint JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE = 0x00002000;
     private const int JobObjectExtendedLimitInformation = 9;
+    private const int JobObjectBasicAccountingInformation = 1;
+    private const int JOB_EMPTY_TIMEOUT_MS = 30000;
     private const uint INFINITE = 0xFFFFFFFF;
     private const uint WAIT_OBJECT_0 = 0x00000000;
     private const uint JOB_OBJECT_QUERY = 0x0004;
@@ -141,6 +145,19 @@ public static class PerformanceJobHost
     }
 
     [StructLayout(LayoutKind.Sequential)]
+    private struct JOBOBJECT_BASIC_ACCOUNTING_INFORMATION
+    {
+        public long TotalUserTime;
+        public long TotalKernelTime;
+        public long ThisPeriodTotalUserTime;
+        public long ThisPeriodTotalKernelTime;
+        public uint TotalPageFaultCount;
+        public uint TotalProcesses;
+        public uint ActiveProcesses;
+        public uint TotalTerminatedProcesses;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
     private struct FILETIME
     {
         public uint LowDateTime;
@@ -196,6 +213,15 @@ public static class PerformanceJobHost
         int informationClass,
         ref JOBOBJECT_EXTENDED_LIMIT_INFORMATION information,
         uint informationLength
+    );
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    private static extern bool QueryInformationJobObject(
+        IntPtr job,
+        int informationClass,
+        ref JOBOBJECT_BASIC_ACCOUNTING_INFORMATION information,
+        uint informationLength,
+        IntPtr returnLength
     );
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
@@ -323,6 +349,27 @@ public static class PerformanceJobHost
         }
     }
 
+    private static void WaitForJobEmpty(IntPtr job)
+    {
+        var timer = Stopwatch.StartNew();
+        while (timer.ElapsedMilliseconds < JOB_EMPTY_TIMEOUT_MS)
+        {
+            var accounting = new JOBOBJECT_BASIC_ACCOUNTING_INFORMATION();
+            if (!QueryInformationJobObject(
+                job,
+                JobObjectBasicAccountingInformation,
+                ref accounting,
+                (uint)Marshal.SizeOf(typeof(JOBOBJECT_BASIC_ACCOUNTING_INFORMATION)),
+                IntPtr.Zero))
+            {
+                throw Error("QueryInformationJobObject failed after Job termination");
+            }
+            if (accounting.ActiveProcesses == 0) return;
+            Thread.Sleep(10);
+        }
+        throw new TimeoutException("Job processes did not terminate before timeout");
+    }
+
     public static PerformanceWorkspaceLease OpenWorkspaceAndHold(
         string runDirectory,
         string profileDirectory,
@@ -439,7 +486,11 @@ public static class PerformanceJobHost
             Console.Out.Flush();
             Console.In.ReadLine();
             if (!TerminateJobObject(job, 0)) throw Error("TerminateJobObject failed");
-            WaitForSingleObject(process.hProcess, INFINITE);
+            if (WaitForSingleObject(process.hProcess, INFINITE) != WAIT_OBJECT_0)
+            {
+                throw Error("WaitForSingleObject failed after Job termination");
+            }
+            WaitForJobEmpty(job);
             return 0;
         }
         finally

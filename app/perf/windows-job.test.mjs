@@ -48,6 +48,24 @@ test("native host confirms termination when Job assignment fails", () => {
   assert.equal(source.match(/TerminateUnassignedProcess\(process\.hProcess/g)?.length, 2);
 });
 
+test("native Job shutdown keeps handle ownership and never terminates by PID", () => {
+  const source = readFileSync(new URL("./windows-job-host.cs", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /CreateProcess[\s\S]*CREATE_SUSPENDED[\s\S]*AssignProcessToJobObject\(job, process\.hProcess\)[\s\S]*ResumeThread\(process\.hThread\)/
+  );
+  assert.match(
+    source,
+    /TerminateJobObject\(job, 0\)[\s\S]*WaitForSingleObject\(process\.hProcess, INFINITE\) != WAIT_OBJECT_0[\s\S]*throw Error\("WaitForSingleObject failed after Job termination"\)/
+  );
+  assert.match(
+    source,
+    /WaitForJobEmpty[\s\S]*JOB_EMPTY_TIMEOUT_MS[\s\S]*QueryInformationJobObject[\s\S]*accounting\.ActiveProcesses == 0/
+  );
+  assert.match(source, /JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE/);
+  assert.doesNotMatch(source, /taskkill|Stop-Process/i);
+});
+
 test("native fixture lease holds a read-only shared handle until release", () => {
   const source = readFileSync(new URL("./windows-job-host.cs", import.meta.url), "utf8");
   assert.match(source, /FILE_SHARE_READ/);

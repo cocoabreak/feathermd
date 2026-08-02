@@ -432,7 +432,7 @@ export async function launchPerformanceJob(workspace, spawnProcess = spawn) {
   return {
     pid: ready.pid,
     get terminationConfirmed() {
-      return host.exitCode !== null || host.signalCode !== null;
+      return host.exitCode === 0;
     },
     contains(pid) {
       return queryPerformanceJobMembership(jobName, pid);
