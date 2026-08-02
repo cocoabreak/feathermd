@@ -17,9 +17,9 @@ const loadedFaces = new Set<FontFace>();
 
 class FakeFontFace {
   family: string;
-  source: ArrayBuffer;
+  source: ArrayBuffer | Uint8Array<ArrayBuffer>;
 
-  constructor(family: string, source: ArrayBuffer) {
+  constructor(family: string, source: ArrayBuffer | Uint8Array<ArrayBuffer>) {
     this.family = family;
     this.source = source;
   }
@@ -95,6 +95,22 @@ describe("local font runtime", () => {
     expect(loadedFaces.size).toBe(2);
     expect(localFontsRuntimeStore.applied).toEqual({ body: true, code: true });
     customStyle.remove();
+  });
+
+  it("release IPCのnumber配列応答をFontFace用バイナリへ正規化する", async () => {
+    settingsStore.setLocalFontsEnabled(true);
+    invokeMock.mockImplementation(async (command, args) => {
+      if (command === "get_local_font_status") return status(true, false);
+      if ((args as { slot: "body" }).slot === "body") return [0x4f, 0x54, 0x54, 0x4f];
+      return undefined;
+    });
+
+    await applyLocalFonts();
+
+    expect(localFontsRuntimeStore.applied).toEqual({ body: true, code: false });
+    const [face] = [...loadedFaces] as unknown as FakeFontFace[];
+    expect(face.source).toBeInstanceOf(Uint8Array);
+    expect([...new Uint8Array(face.source)]).toEqual([0x4f, 0x54, 0x54, 0x4f]);
   });
 
   it("片側のFontFace失敗時も正常な側だけを適用する", async () => {

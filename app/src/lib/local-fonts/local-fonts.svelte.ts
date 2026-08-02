@@ -95,8 +95,22 @@ function updateStyle(faces: Partial<Record<LocalFontSlot, FontFace>>): void {
   style.textContent = rules.join("\n\n");
 }
 
+function normalizeFontFaceSource(value: unknown): ArrayBuffer | Uint8Array<ArrayBuffer> {
+  if (value instanceof ArrayBuffer) return value;
+  if (ArrayBuffer.isView(value)) {
+    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength).slice();
+  }
+  if (
+    Array.isArray(value) &&
+    value.every((byte) => Number.isInteger(byte) && byte >= 0 && byte <= 255)
+  ) {
+    return Uint8Array.from(value);
+  }
+  throw new Error("ローカルフォントのバイナリ応答が不正です");
+}
+
 async function loadFace(slot: LocalFontSlot): Promise<FontFace> {
-  const bytes = await invoke<ArrayBuffer>("read_local_font", { slot });
+  const bytes = normalizeFontFaceSource(await invoke<unknown>("read_local_font", { slot }));
   const face = new FontFace(FAMILY_NAMES[slot], bytes);
   return face.load();
 }
@@ -168,7 +182,9 @@ export async function pickLocalFont(slot: LocalFontSlot): Promise<boolean> {
   const selected = await invoke<LocalFontInfo | null>("pick_local_font", { slot });
   if (!selected) return false;
   try {
-    const bytes = await invoke<ArrayBuffer>("read_local_font_candidate", { slot });
+    const bytes = normalizeFontFaceSource(
+      await invoke<unknown>("read_local_font_candidate", { slot })
+    );
     const face = await new FontFace(FAMILY_NAMES[slot], bytes).load();
     await invoke("commit_local_font_candidate", { slot });
     await applyLocalFonts({ [slot]: face });

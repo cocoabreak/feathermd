@@ -1,0 +1,7 @@
+.markdown-body {
+  font-family: Georgia, serif;
+}
+
+.markdown-body :where(pre, code, kbd, samp) {
+  font-family: Consolas, monospace;
+}

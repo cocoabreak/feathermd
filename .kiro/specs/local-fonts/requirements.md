@@ -75,9 +75,9 @@ So that 日本語本文とコードを欠落なく読みたい
 **受け入れ条件**
 
 - [x] 日本語の漢字、ひらがな、カタカナ、全角・半角記号を含むfixtureで表示を確認する
-- [ ] 公式配布の Noto Sans CJK JP を本文用、Noto Sans Mono CJK JP をコード用にした実アプリ確認を行う
+- [x] 公式配布の Noto Sans CJK JP を本文用、Noto Sans Mono CJK JP をコード用にした実アプリ確認を行う
 - [x] CJKフォントはBase64文字列やJSON数値配列ではなく、Tauriのraw binary IPCからWebViewへ渡す
-- [ ] CJKフォント適用後もUI応答、タブ切替、ズーム、印刷/PDFが継続できる
+- [x] CJKフォント適用後もUI応答、タブ切替、ズーム、印刷/PDFが継続できる
 
 ## 安全性・非機能要求
 

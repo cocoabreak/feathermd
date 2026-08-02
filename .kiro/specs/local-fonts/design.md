@@ -23,11 +23,11 @@
 
 スロットは `body` と `code` の2件に固定する。コマンド引数は列挙値として解析し、それ以外を拒否する。
 
-| 形式 | 拡張子 | 先頭シグネチャ |
-| --- | --- | --- |
-| WOFF2 | `.woff2` | `wOF2` |
-| TrueType | `.ttf` | `0x00010000` または `true` |
-| OpenType/CFF | `.otf` | `OTTO` |
+| 形式         | 拡張子   | 先頭シグネチャ             |
+| ------------ | -------- | -------------------------- |
+| WOFF2        | `.woff2` | `wOF2`                     |
+| TrueType     | `.ttf`   | `0x00010000` または `true` |
+| OpenType/CFF | `.otf`   | `OTTO`                     |
 
 WOFF、TTC/OTC、拡張子とシグネチャが一致しないファイルはv1で拒否する。1ファイル32 MiB、2スロット合計64 MiBを上限とする。ブラウザーによるフォント解析に失敗した場合も適用成功にはしない。
 
@@ -78,8 +78,9 @@ local-fonts/
 `app/src/lib/local-fonts/local-fonts.svelte.ts` が読込、`FontFace`登録、style適用、エラー、世代管理を一元化する。
 
 - family名はアプリ固定の内部名 `FeatherMD Local Body` / `FeatherMD Local Code` とする
-- `invoke<ArrayBuffer>("read_local_font", { slot })` のraw responseを `FontFace`へ渡す
+- `read_local_font` のraw responseを、releaseで返る数値配列も含めてBufferSourceへ正規化して `FontFace`へ渡す
 - `FontFace.load()`成功後だけ `document.fonts.add()`する
+- release CSPは `font-src 'self' data:` に限定し、`FontFace(ArrayBuffer)`の内部data URLだけを許可する
 - 置換、解除、無効化時は旧 `FontFace`を `document.fonts.delete()`し、参照を破棄する
 - 世代番号が古い非同期結果は登録・style更新へ使わない
 - 一方のスロットが失敗しても、他方の正常スロットは適用する
@@ -88,11 +89,18 @@ local-fonts/
 
 ```css
 .markdown-body {
-  font-family: "FeatherMD Local Body", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family:
+    "FeatherMD Local Body",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 }
 
 .markdown-body :where(pre, code, kbd, samp) {
-  font-family: "FeatherMD Local Code", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-family:
+    "FeatherMD Local Code", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
 }
 ```
 

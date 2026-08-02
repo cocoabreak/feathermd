@@ -229,4 +229,22 @@ mod app_identity_tests {
             .iter()
             .all(|path| std::fs::read(path).is_ok_and(|bytes| bytes.as_slice() == b"performance")));
     }
+
+    #[test]
+    fn release_csp_allows_array_buffer_font_faces_without_broadening_other_sources() {
+        let config: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
+            .expect("Tauri config should be valid JSON");
+        let csp = config["app"]["security"]["csp"]
+            .as_str()
+            .expect("CSP should be configured");
+        let font_source = csp
+            .split(';')
+            .map(str::trim)
+            .find(|directive| directive.starts_with("font-src "));
+
+        assert_eq!(font_source, Some("font-src 'self' data:"));
+        assert!(!csp.contains("font-src *"));
+        assert!(!csp.contains("font-src http:"));
+        assert!(!csp.contains("font-src https:"));
+    }
 }
