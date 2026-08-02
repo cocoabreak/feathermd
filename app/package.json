@@ -1,6 +1,6 @@
 {
   "name": "feathermd",
-  "version": "0.2.3",
+  "version": "0.2.4",
   "description": "A fast, read-only Markdown viewer for local files.",
   "type": "module",
   "repository": {
