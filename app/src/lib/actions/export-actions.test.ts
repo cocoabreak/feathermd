@@ -25,6 +25,9 @@ describe("native export commands", () => {
         "<title>&lt;/title&gt;&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;</title>"
       ),
     });
+    const contents = (mockedInvoke.mock.calls[0][1] as Record<string, unknown>).contents as string;
+    expect(contents).not.toContain("FeatherMD Local");
+    expect(contents).not.toContain("local-fonts");
   });
 
   it("SVGをネイティブ保存コマンドへ渡す", async () => {

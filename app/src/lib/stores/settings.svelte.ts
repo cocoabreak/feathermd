@@ -24,6 +24,7 @@ export interface Settings {
   externalEditorCommand: string;
   customCssEnabled: boolean;
   customCssPath: string;
+  localFontsEnabled: boolean;
   externalImagePolicy: ExternalImagePolicy;
   checkForUpdatesOnStartup: boolean;
 }
@@ -70,6 +71,7 @@ const defaults: Settings = {
   externalEditorCommand: "",
   customCssEnabled: false,
   customCssPath: "",
+  localFontsEnabled: false,
   externalImagePolicy: "ask",
   checkForUpdatesOnStartup: true,
 };
@@ -140,6 +142,9 @@ function createSettingsStore() {
     },
     setCustomCssPath(path: string) {
       settings = { ...settings, customCssPath: path };
+    },
+    setLocalFontsEnabled(enabled: boolean) {
+      settings = { ...settings, localFontsEnabled: enabled };
     },
     setExternalImagePolicy(policy: ExternalImagePolicy) {
       settings = { ...settings, externalImagePolicy: policy };
