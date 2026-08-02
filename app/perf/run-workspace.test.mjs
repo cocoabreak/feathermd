@@ -1,0 +1,247 @@
+import assert from "node:assert/strict";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
+import os from "node:os";
+import path from "node:path";
+import test from "node:test";
+import { preparePerformanceLaunch } from "./runner.mjs";
+import {
+  cleanupPerformanceWorkspace,
+  createPerformanceWorkspace,
+  resolvePerformanceAppDataLocation,
+} from "./run-workspace.mjs";
+
+function fixture() {
+  const root = mkdtempSync(path.join(os.tmpdir(), "feathermd-workspace-test-"));
+  const roaming = path.join(root, "roaming");
+  const temp = path.join(root, "temp");
+  mkdirSync(roaming);
+  mkdirSync(temp);
+  const plan = preparePerformanceLaunch(
+    {
+      port: 41_237,
+      runDir: path.join(temp, "ignored"),
+      executablePath: "C:\\build\\feathermd.exe",
+      environment: {},
+      platform: "win32",
+    },
+    {
+      listProcesses: () => [],
+      mutexExists: () => false,
+      getRoamingAppData: () => roaming,
+    }
+  );
+  return { root, roaming, temp, plan };
+}
+
+test("rebuilds performance AppData from the canonical Roaming path", () => {
+  const performanceIdentifier = "com.cocoabreak.FeatherMD.performance";
+  const plannedRoamingRoot = "C:\\Users\\RUNNER~1\\AppData\\Roaming";
+  const canonicalRoamingRoot = "C:\\Users\\runneradmin\\AppData\\Roaming";
+  const plan = {
+    performanceIdentifier,
+    performanceAppDataDir: path.win32.join(plannedRoamingRoot, performanceIdentifier),
+  };
+
+  const location = resolvePerformanceAppDataLocation(plan, (directory, label) => {
+    assert.equal(directory, plannedRoamingRoot);
+    assert.equal(label, "Roaming AppData");
+    return { path: canonicalRoamingRoot };
+  });
+
+  assert.equal(location.roamingRoot.path, canonicalRoamingRoot);
+  assert.equal(
+    location.performanceAppDataDir,
+    path.win32.join(canonicalRoamingRoot, performanceIdentifier)
+  );
+});
+
+test("creates and removes owned profile and performance AppData", () => {
+  const { root, temp, plan } = fixture();
+  try {
+    const workspace = createPerformanceWorkspace(plan, { tempRoot: temp });
+    assert.equal(existsSync(workspace.profileDir), true);
+    assert.equal(existsSync(workspace.performanceAppDataDir), true);
+    assert.match(path.basename(workspace.runDir), /^feathermd-performance-run-/);
+    cleanupPerformanceWorkspace(workspace);
+    assert.equal(existsSync(workspace.runDir), false);
+    assert.equal(existsSync(workspace.performanceAppDataDir), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps all four normal stores isolated from performance stores and cleanup", () => {
+  const { root, temp, plan } = fixture();
+  const stores = ["settings.json", "tabs.json", "recent.json", "trusted-root.json"];
+  try {
+    mkdirSync(plan.normalAppDataDir);
+    for (const store of stores) {
+      writeFileSync(path.join(plan.normalAppDataDir, store), `normal:${store}`);
+    }
+    const workspace = createPerformanceWorkspace(plan, { tempRoot: temp });
+    for (const store of stores) {
+      writeFileSync(path.join(workspace.performanceAppDataDir, store), `performance:${store}`);
+    }
+    for (const store of stores) {
+      assert.equal(
+        readFileSync(path.join(plan.normalAppDataDir, store), "utf8"),
+        `normal:${store}`
+      );
+      assert.equal(
+        readFileSync(path.join(workspace.performanceAppDataDir, store), "utf8"),
+        `performance:${store}`
+      );
+    }
+    cleanupPerformanceWorkspace(workspace);
+    assert.equal(existsSync(plan.normalAppDataDir), true);
+    assert.ok(
+      stores.every(
+        (store) =>
+          readFileSync(path.join(plan.normalAppDataDir, store), "utf8") === `normal:${store}`
+      )
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("never deletes normal AppData or its parent when cleanup target is redirected", () => {
+  const { root, roaming, temp, plan } = fixture();
+  try {
+    mkdirSync(plan.normalAppDataDir);
+    const normalSentinel = path.join(plan.normalAppDataDir, "settings.json");
+    const parentSentinel = path.join(roaming, "keep.txt");
+    writeFileSync(normalSentinel, "normal");
+    writeFileSync(parentSentinel, "parent");
+    const workspace = createPerformanceWorkspace(plan, { tempRoot: temp });
+    workspace.performanceAppDataDir = plan.normalAppDataDir;
+    const removed = [];
+    assert.throws(
+      () =>
+        cleanupPerformanceWorkspace(workspace, {
+          remove: (directory) => removed.push(directory),
+        }),
+      /ownership changed/
+    );
+    assert.deepEqual(removed, []);
+    assert.equal(readFileSync(normalSentinel, "utf8"), "normal");
+    assert.equal(readFileSync(parentSentinel, "utf8"), "parent");
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("attempts both owned cleanup targets when the first removal fails", () => {
+  const { root, temp, plan } = fixture();
+  try {
+    const workspace = createPerformanceWorkspace(plan, { tempRoot: temp });
+    const attempted = [];
+    assert.throws(
+      () =>
+        cleanupPerformanceWorkspace(workspace, {
+          remove: (directory, options) => {
+            attempted.push({ directory, options });
+            throw new Error(`injected cleanup failure ${attempted.length}`);
+          },
+        }),
+      AggregateError
+    );
+    assert.deepEqual(
+      attempted.map(({ directory }) => directory),
+      [workspace.runDir, workspace.performanceAppDataDir]
+    );
+    assert.ok(
+      attempted.every(({ options }) => options.maxRetries === 10 && options.retryDelay === 180)
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("refuses cleanup after an owned directory is replaced", () => {
+  const { root, temp, plan } = fixture();
+  try {
+    const workspace = createPerformanceWorkspace(plan, { tempRoot: temp });
+    const moved = `${workspace.profileDir}-moved`;
+    renameSync(workspace.profileDir, moved);
+    mkdirSync(workspace.profileDir);
+    assert.throws(() => cleanupPerformanceWorkspace(workspace), /ownership changed/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("requires a plan that passed existing-instance preflight", () => {
+  const { root, temp, plan } = fixture();
+  try {
+    const unchecked = { ...plan };
+    assert.throws(() => createPerformanceWorkspace(unchecked, { tempRoot: temp }), /preflight/);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("refuses existing performance AppData before creating a run directory", () => {
+  const { root, temp, plan } = fixture();
+  try {
+    mkdirSync(plan.performanceAppDataDir);
+    const before = readdirSync(temp);
+    assert.throws(() => createPerformanceWorkspace(plan, { tempRoot: temp }), /already exists/);
+    assert.deepEqual(readdirSync(temp), before);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("rolls back owned directories when settings initialization fails", () => {
+  const { root, temp, plan } = fixture();
+  try {
+    assert.throws(
+      () =>
+        createPerformanceWorkspace(plan, {
+          tempRoot: temp,
+          writeSettings: () => {
+            throw new Error("injected settings failure");
+          },
+        }),
+      /injected settings failure/
+    );
+    assert.deepEqual(readdirSync(temp), []);
+    assert.equal(existsSync(plan.performanceAppDataDir), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("marks a workspace rollback failure unsafe for later trials", () => {
+  const { root, temp, plan } = fixture();
+  try {
+    let error;
+    try {
+      createPerformanceWorkspace(plan, {
+        tempRoot: temp,
+        writeSettings: () => {
+          throw new Error("injected settings failure");
+        },
+        remove: () => {
+          throw new Error("injected rollback failure");
+        },
+      });
+    } catch (caught) {
+      error = caught;
+    }
+    assert.ok(error instanceof AggregateError);
+    assert.equal(error.performanceTrialContinuationSafe, false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});

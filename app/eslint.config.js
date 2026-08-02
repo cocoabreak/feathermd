@@ -70,6 +70,6 @@ export default [
   },
 
   {
-    ignores: [".svelte-kit/**", "build/**", "node_modules/**", "src-tauri/**"],
+    ignores: [".svelte-kit/**", "build/**", "node_modules/**", "perf/artifacts/**", "src-tauri/**"],
   },
 ];
