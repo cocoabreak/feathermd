@@ -13,7 +13,11 @@ import os from "node:os";
 import path from "node:path";
 import test from "node:test";
 import { preparePerformanceLaunch } from "./runner.mjs";
-import { cleanupPerformanceWorkspace, createPerformanceWorkspace } from "./run-workspace.mjs";
+import {
+  cleanupPerformanceWorkspace,
+  createPerformanceWorkspace,
+  resolvePerformanceAppDataLocation,
+} from "./run-workspace.mjs";
 
 function fixture() {
   const root = mkdtempSync(path.join(os.tmpdir(), "feathermd-workspace-test-"));
@@ -37,6 +41,28 @@ function fixture() {
   );
   return { root, roaming, temp, plan };
 }
+
+test("rebuilds performance AppData from the canonical Roaming path", () => {
+  const performanceIdentifier = "com.cocoabreak.FeatherMD.performance";
+  const plannedRoamingRoot = "C:\\Users\\RUNNER~1\\AppData\\Roaming";
+  const canonicalRoamingRoot = "C:\\Users\\runneradmin\\AppData\\Roaming";
+  const plan = {
+    performanceIdentifier,
+    performanceAppDataDir: path.win32.join(plannedRoamingRoot, performanceIdentifier),
+  };
+
+  const location = resolvePerformanceAppDataLocation(plan, (directory, label) => {
+    assert.equal(directory, plannedRoamingRoot);
+    assert.equal(label, "Roaming AppData");
+    return { path: canonicalRoamingRoot };
+  });
+
+  assert.equal(location.roamingRoot.path, canonicalRoamingRoot);
+  assert.equal(
+    location.performanceAppDataDir,
+    path.win32.join(canonicalRoamingRoot, performanceIdentifier)
+  );
+});
 
 test("creates and removes owned profile and performance AppData", () => {
   const { root, temp, plan } = fixture();

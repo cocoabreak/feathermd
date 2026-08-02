@@ -53,23 +53,33 @@ function assertDirectChild(parent, child, expectedName, label) {
   }
 }
 
+export function resolvePerformanceAppDataLocation(plan, resolveDirectory = realDirectory) {
+  const plannedRoamingRoot = path.win32.dirname(plan.performanceAppDataDir);
+  assertDirectChild(
+    plannedRoamingRoot,
+    plan.performanceAppDataDir,
+    plan.performanceIdentifier,
+    "performance AppData"
+  );
+  const roamingRoot = resolveDirectory(plannedRoamingRoot, "Roaming AppData");
+  const performanceAppDataDir = path.win32.join(roamingRoot.path, plan.performanceIdentifier);
+  assertDirectChild(
+    roamingRoot.path,
+    performanceAppDataDir,
+    plan.performanceIdentifier,
+    "performance AppData"
+  );
+  return { roamingRoot, performanceAppDataDir };
+}
+
 export function createPerformanceWorkspace(
   plan,
   { tempRoot = os.tmpdir(), writeSettings = writeFileSync, remove = rmSync } = {}
 ) {
   assertPreparedPerformancePlan(plan);
   const realTemp = realDirectory(tempRoot, "temporary root");
-  const roamingRoot = realDirectory(
-    path.win32.dirname(plan.performanceAppDataDir),
-    "Roaming AppData"
-  );
-  assertDirectChild(
-    roamingRoot.path,
-    plan.performanceAppDataDir,
-    plan.performanceIdentifier,
-    "performance AppData"
-  );
-  if (existsSync(plan.performanceAppDataDir)) {
+  const { roamingRoot, performanceAppDataDir } = resolvePerformanceAppDataLocation(plan);
+  if (existsSync(performanceAppDataDir)) {
     throw new Error("performance AppData already exists; refusing to overwrite it");
   }
 
@@ -86,8 +96,8 @@ export function createPerformanceWorkspace(
     realProfile = realDirectory(profileDir, "WebView profile");
     assertDirectChild(realRun.path, realProfile.path, "webview-profile", "WebView profile");
 
-    mkdirSync(plan.performanceAppDataDir);
-    realPerformanceAppData = realDirectory(plan.performanceAppDataDir, "performance AppData");
+    mkdirSync(performanceAppDataDir);
+    realPerformanceAppData = realDirectory(performanceAppDataDir, "performance AppData");
     assertDirectChild(
       roamingRoot.path,
       realPerformanceAppData.path,
