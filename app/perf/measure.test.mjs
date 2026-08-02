@@ -1,10 +1,53 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
+  assertNoForeignFeatherMdProcesses,
+  createFeatherMdBackgroundGuard,
   finishPerformanceLaunch,
   isProductionTauriUrl,
   measurePerformanceWorkspaceStartup,
 } from "./measure.mjs";
+
+test("rejects a normal app race without exposing any process termination operation", () => {
+  const owned = {
+    pid: 4242,
+    parentPid: 100,
+    creationTime: "2026-08-01T01:02:03.0000000Z",
+    executablePath: "c:\\build\\perf\\feathermd.exe",
+  };
+  assert.doesNotThrow(() => assertNoForeignFeatherMdProcesses(owned, [{ ...owned }]));
+  assert.throws(
+    () =>
+      assertNoForeignFeatherMdProcesses(owned, [
+        owned,
+        {
+          ...owned,
+          pid: 5151,
+          creationTime: "2026-08-01T01:02:04.0000000Z",
+          executablePath: "c:\\program files\\feathermd\\feathermd.exe",
+        },
+      ]),
+    /started after performance preflight/
+  );
+});
+
+test("rejects a late normal app race at a completion boundary", () => {
+  const owned = {
+    pid: 4242,
+    parentPid: 100,
+    creationTime: "2026-08-01T01:02:03.0000000Z",
+    executablePath: "c:\\build\\perf\\feathermd.exe",
+  };
+  let checks = 0;
+  const guard = createFeatherMdBackgroundGuard(owned, () => {
+    checks += 1;
+    return checks < 3 ? [owned] : [owned, { ...owned, pid: 5151 }];
+  });
+  assert.doesNotThrow(guard);
+  assert.doesNotThrow(guard);
+  assert.throws(guard, /started after performance preflight/);
+  assert.equal(checks, 3);
+});
 
 test("accepts only exact production Tauri origins", () => {
   for (const value of [

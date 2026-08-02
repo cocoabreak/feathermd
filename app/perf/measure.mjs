@@ -25,6 +25,7 @@ import { cleanupPerformanceWorkspace, createPerformanceWorkspace } from "./run-w
 import { launchPerformanceJob } from "./windows-job.mjs";
 import {
   assertOwnedCdpProcess,
+  listProcessIdentities,
   queryLoopbackListenerOwner,
   queryProcessDetails,
   queryProcessIdentity,
@@ -48,6 +49,26 @@ export function isProductionTauriUrl(value) {
   } catch {
     return false;
   }
+}
+
+export function assertNoForeignFeatherMdProcesses(appIdentity, identities) {
+  assert.ok(appIdentity, "performance app identity is missing");
+  assert.ok(Array.isArray(identities), "FeatherMD background process query is invalid");
+  const foreign = identities.filter(
+    (identity) =>
+      identity.pid !== appIdentity.pid ||
+      identity.creationTime !== appIdentity.creationTime ||
+      identity.executablePath !== appIdentity.executablePath
+  );
+  assert.equal(foreign.length, 0, "another FeatherMD process started after performance preflight");
+}
+
+export function createFeatherMdBackgroundGuard(
+  appIdentity,
+  listProcesses = listProcessIdentities
+) {
+  return () =>
+    assertNoForeignFeatherMdProcesses(appIdentity, listProcesses("feathermd.exe"));
 }
 
 function snapshotStores(directory) {
@@ -183,6 +204,8 @@ export async function launchReadyPerformanceApp(workspace) {
       path.win32.normalize(workspace.command).toLowerCase(),
       "Job-owned PID does not match the performance executable"
     );
+    const assertBackgroundCondition = createFeatherMdBackgroundGuard(appIdentity);
+    assertBackgroundCondition();
 
     const driver = new WebView2Driver({ port: workspace.port });
     await driver.waitForCdp(90_000);
@@ -228,7 +251,16 @@ export async function launchReadyPerformanceApp(workspace) {
       'document.querySelector("[data-tab-id].bg-background")?.dataset.tabId ?? null'
     );
     assert.equal(initialTabId, null, "performance session did not start empty");
-    return { job, productionDriver, startupRequestedAt, startupReadyAt, initialTabId };
+    assertBackgroundCondition();
+    return {
+      job,
+      productionDriver,
+      appIdentity,
+      assertBackgroundCondition,
+      startupRequestedAt,
+      startupReadyAt,
+      initialTabId,
+    };
   } catch (error) {
     if (error?.performanceWorkspaceCleanupSafe === false) {
       cleanupSafe = false;
@@ -282,8 +314,15 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
     const repeatFixture = materializePerformanceFixture(workspace, fixture, { variant: "repeat" });
     const launch = await launchReadyPerformanceApp(workspace);
     job = launch.job;
-    const { productionDriver, startupRequestedAt, startupReadyAt, initialTabId } = launch;
+    const {
+      productionDriver,
+      assertBackgroundCondition,
+      startupRequestedAt,
+      startupReadyAt,
+      initialTabId,
+    } = launch;
 
+    assertBackgroundCondition();
     const firstRequestedAt = performance.now();
     const firstFixtureLease = await job.openFixture(firstFixture);
     fixtureLeases.push(firstFixtureLease);
@@ -296,6 +335,7 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
     const firstRenderedAt = performance.now();
     assertFixtureLeaseProtection(firstFixture.path, workspace.runDir);
 
+    assertBackgroundCondition();
     await startFixtureReplacementObservation(productionDriver, firstFixture);
     const repeatRequestedAt = performance.now();
     const repeatFixtureLease = await job.openFixture(repeatFixture);
@@ -309,6 +349,7 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
     await waitForFixtureReplacement(productionDriver);
     await waitForPerformanceFixture(productionDriver, repeatFixture);
     const repeatRenderedAt = performance.now();
+    assertBackgroundCondition();
     assertFixtureLeaseProtection(firstFixture.path, workspace.runDir);
     assertFixtureLeaseProtection(repeatFixture.path, workspace.runDir);
     assert.ok(readdirSync(workspace.profileDir).length > 0, "WebView profile stayed empty");

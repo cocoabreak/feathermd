@@ -1,5 +1,14 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, renameSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  readdirSync,
+  renameSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import test from "node:test";
@@ -39,6 +48,67 @@ test("creates and removes owned profile and performance AppData", () => {
     cleanupPerformanceWorkspace(workspace);
     assert.equal(existsSync(workspace.runDir), false);
     assert.equal(existsSync(workspace.performanceAppDataDir), false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("keeps all four normal stores isolated from performance stores and cleanup", () => {
+  const { root, temp, plan } = fixture();
+  const stores = ["settings.json", "tabs.json", "recent.json", "trusted-root.json"];
+  try {
+    mkdirSync(plan.normalAppDataDir);
+    for (const store of stores) {
+      writeFileSync(path.join(plan.normalAppDataDir, store), `normal:${store}`);
+    }
+    const workspace = createPerformanceWorkspace(plan, { tempRoot: temp });
+    for (const store of stores) {
+      writeFileSync(path.join(workspace.performanceAppDataDir, store), `performance:${store}`);
+    }
+    for (const store of stores) {
+      assert.equal(
+        readFileSync(path.join(plan.normalAppDataDir, store), "utf8"),
+        `normal:${store}`
+      );
+      assert.equal(
+        readFileSync(path.join(workspace.performanceAppDataDir, store), "utf8"),
+        `performance:${store}`
+      );
+    }
+    cleanupPerformanceWorkspace(workspace);
+    assert.equal(existsSync(plan.normalAppDataDir), true);
+    assert.ok(
+      stores.every(
+        (store) =>
+          readFileSync(path.join(plan.normalAppDataDir, store), "utf8") === `normal:${store}`
+      )
+    );
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("never deletes normal AppData or its parent when cleanup target is redirected", () => {
+  const { root, roaming, temp, plan } = fixture();
+  try {
+    mkdirSync(plan.normalAppDataDir);
+    const normalSentinel = path.join(plan.normalAppDataDir, "settings.json");
+    const parentSentinel = path.join(roaming, "keep.txt");
+    writeFileSync(normalSentinel, "normal");
+    writeFileSync(parentSentinel, "parent");
+    const workspace = createPerformanceWorkspace(plan, { tempRoot: temp });
+    workspace.performanceAppDataDir = plan.normalAppDataDir;
+    const removed = [];
+    assert.throws(
+      () =>
+        cleanupPerformanceWorkspace(workspace, {
+          remove: (directory) => removed.push(directory),
+        }),
+      /ownership changed/
+    );
+    assert.deepEqual(removed, []);
+    assert.equal(readFileSync(normalSentinel, "utf8"), "normal");
+    assert.equal(readFileSync(parentSentinel, "utf8"), "parent");
   } finally {
     rmSync(root, { recursive: true, force: true });
   }

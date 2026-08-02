@@ -26,7 +26,7 @@
 - [ ] 通常版とperformance版のsettings、tabs、recent、trusted rootが相互に読み書きされない統合テストを追加する
 - [x] performance実行ファイルをCLI引数なしで専用AppData・プロファイル・loopback CDPポートから起動する
 - [x] 通常版またはperformance版の既存インスタンスを実行名とsingle-instance mutexから検出し、終了・入力せず開始前に拒否する
-- [ ] preflight後に通常版が起動した試行を背景条件違反として破棄し、通常版を終了しないテストを追加する
+- [x] preflight後に通常版が起動した試行を背景条件違反として破棄し、通常版を終了しないテストを追加する
 - [x] 起動PID・専用WebViewプロファイル・CDPターゲットの所有確認後だけfixtureを送る
 - [x] CLI/single-instanceの既存経路でfixtureを開き、production専用フックなしで状態を観測する
 - [x] cold/warm起動、plain初回・再表示、rich初回・再表示の完了条件を実装する
@@ -36,7 +36,7 @@
 - [x] タイムアウト、試行不足、異常終了を失敗として記録する
 - [x] 起動時のPID、作成時刻、実行ファイル、親子関係を保持し、終了直前にidentityを再検証する
 - [x] PID再利用、主PID消失、起動競合時に、所有を確認できないPIDを終了しないテストを追加する
-- [ ] performance AppDataの解決先を検証し、通常版AppDataや親ディレクトリを削除しないテストを追加する
+- [x] performance AppDataの解決先を検証し、通常版AppDataや親ディレクトリを削除しないテストを追加する
 
 ## T-004: Windowsメモリ計測
 
@@ -77,7 +77,7 @@
 ## T-008: 検証・レビュー
 
 - [x] frontend format / lint / check / test / buildを完了する
-- [ ] Rust fmt / Clippy / testを完了する
+- [x] Rust fmt / Clippy / testを完了する
 - [ ] Windows release実アプリで全計測シナリオを完走する
 - [x] 計測用フック、fixture、個人環境情報がproductionバンドルへ混入しないことを確認する
 - [x] 設計・差分レビューを完了する
