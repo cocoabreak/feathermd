@@ -7,6 +7,7 @@ import { tabStore } from "$lib/stores/tab.svelte";
 import { explorerStore } from "$lib/stores/explorer.svelte";
 import { settingsStore } from "$lib/stores/settings.svelte";
 import { areExternalImagesApprovedForDocument } from "$lib/stores/external-image-permission";
+import { waitForLocalFonts } from "$lib/local-fonts/local-fonts.svelte";
 
 export const MAX_PNG_DIMENSION = 16_384;
 export const MAX_PNG_PIXELS = 25_000_000;
@@ -55,6 +56,7 @@ export async function printDocument() {
       console.warn(`plugin beforePrint error (${plugin.name}):`, e);
     }
   }
+  await waitForLocalFonts();
 
   // ダークテーマのまま印刷すると白背景に薄色文字で読めなくなるため、
   // 印刷プレビューの間だけライトテーマへ切り替える（window.print()は

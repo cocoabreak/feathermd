@@ -10,6 +10,13 @@
   import { i18n, type LanguageSetting } from "$lib/i18n/index.svelte";
   import { invoke } from "@tauri-apps/api/core";
   import { applyCustomCss, customCssRuntimeStore } from "$lib/custom-css/custom-css.svelte";
+  import {
+    applyLocalFonts,
+    localFontsRuntimeStore,
+    pickLocalFont,
+    removeLocalFont,
+    type LocalFontSlot,
+  } from "$lib/local-fonts/local-fonts.svelte";
   import { focusTrap } from "$lib/actions/focus-trap";
   import { onMount } from "svelte";
 
@@ -25,6 +32,8 @@
   let shellIntegrationStatus = $state<ShellIntegrationStatus | null>(null);
   let shellIntegrationBusy = $state(false);
   let shellIntegrationError = $state("");
+  let localFontBusy = $state(false);
+  let localFontActionError = $state("");
 
   const m = $derived(i18n.m);
   const categories = $derived([
@@ -36,6 +45,10 @@
   const activeCategoryLabel = $derived(
     categories.find((category) => category.id === activeCategory)?.label ?? m.settings.view
   );
+  const localFontRows = $derived([
+    { slot: "body" as const, label: m.settings.localFontBody },
+    { slot: "code" as const, label: m.settings.localFontCode },
+  ]);
 
   async function toggle(action: () => void) {
     action();
@@ -75,6 +88,39 @@
     settingsStore.setCustomCssEnabled(!settingsStore.settings.customCssEnabled);
     await saveSettings();
     await applyCustomCss();
+  }
+
+  async function runLocalFontAction(action: () => Promise<unknown>) {
+    if (localFontBusy) return;
+    localFontBusy = true;
+    localFontActionError = "";
+    try {
+      await action();
+    } catch (error) {
+      localFontActionError = String(error);
+    } finally {
+      localFontBusy = false;
+    }
+  }
+
+  async function toggleLocalFonts() {
+    await runLocalFontAction(async () => {
+      settingsStore.setLocalFontsEnabled(!settingsStore.settings.localFontsEnabled);
+      await saveSettings();
+      await applyLocalFonts();
+    });
+  }
+
+  async function browseLocalFont(slot: LocalFontSlot) {
+    await runLocalFontAction(() => pickLocalFont(slot));
+  }
+
+  async function clearLocalFont(slot: LocalFontSlot) {
+    await runLocalFontAction(() => removeLocalFont(slot));
+  }
+
+  function formatBytes(size: number): string {
+    return `${(size / 1024 / 1024).toLocaleString(i18n.locale, { maximumFractionDigits: 1 })} MiB`;
   }
 
   async function toggleStartupUpdateCheck() {
@@ -294,6 +340,71 @@
                 {m.settings.customization}
               </summary>
               <div class="pb-2">
+                <div class="border-b pb-2">
+                  <label class="flex cursor-pointer items-center justify-between gap-4 py-1.5">
+                    <span class="text-sm">
+                      {m.settings.localFontsEnabled}
+                      <span class="ml-1 text-xs text-muted-foreground"
+                        >{m.settings.localFontsDescription}</span
+                      >
+                    </span>
+                    <input
+                      type="checkbox"
+                      checked={settingsStore.settings.localFontsEnabled}
+                      disabled={localFontBusy}
+                      onchange={toggleLocalFonts}
+                      class="h-4 w-4 accent-primary disabled:opacity-40"
+                    />
+                  </label>
+                  {#each localFontRows as row (row.slot)}
+                    {@const slotStatus = localFontsRuntimeStore.status[row.slot]}
+                    <div class="py-1.5">
+                      <div class="flex flex-wrap items-center gap-2">
+                        <span class="w-16 shrink-0 text-xs font-medium">{row.label}</span>
+                        <span class="min-w-40 flex-1 truncate text-xs text-muted-foreground">
+                          {#if slotStatus.info}
+                            {slotStatus.info.originalFileName} · {slotStatus.info.format.toUpperCase()}
+                            ·
+                            {formatBytes(slotStatus.info.size)}
+                          {:else}
+                            {m.settings.localFontNotSelected}
+                          {/if}
+                        </span>
+                        <button
+                          type="button"
+                          aria-label={`${row.label}: ${slotStatus.info ? m.settings.localFontReplace : m.settings.localFontSelect}`}
+                          disabled={localFontBusy}
+                          onclick={() => browseLocalFont(row.slot)}
+                          class="whitespace-nowrap rounded-md border bg-muted px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-40"
+                        >
+                          {slotStatus.info
+                            ? m.settings.localFontReplace
+                            : m.settings.localFontSelect}
+                        </button>
+                        <button
+                          type="button"
+                          aria-label={`${row.label}: ${m.settings.localFontRemove}`}
+                          disabled={localFontBusy || (!slotStatus.info && !slotStatus.error)}
+                          onclick={() => clearLocalFont(row.slot)}
+                          class="whitespace-nowrap rounded-md border px-3 py-1.5 text-xs font-medium hover:bg-accent disabled:opacity-40"
+                        >
+                          {m.settings.localFontRemove}
+                        </button>
+                      </div>
+                      {#if slotStatus.error}
+                        <p class="mt-1 break-all text-xs text-destructive" role="alert">
+                          {m.settings.localFontError}: {slotStatus.error}
+                        </p>
+                      {/if}
+                    </div>
+                  {/each}
+                  {#if localFontActionError || localFontsRuntimeStore.error}
+                    <p class="mt-1 break-all text-xs text-destructive" role="alert">
+                      {m.settings.localFontError}: {localFontActionError ||
+                        localFontsRuntimeStore.error}
+                    </p>
+                  {/if}
+                </div>
                 <label class="flex cursor-pointer items-center justify-between gap-4 py-1.5">
                   <span class="text-sm">
                     {m.settings.customCss}

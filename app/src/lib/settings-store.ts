@@ -72,6 +72,9 @@ export async function loadSettings(): Promise<void> {
       if (typeof saved.customCssPath === "string") {
         settingsStore.setCustomCssPath(saved.customCssPath);
       }
+      if (typeof saved.localFontsEnabled === "boolean") {
+        settingsStore.setLocalFontsEnabled(saved.localFontsEnabled);
+      }
       if (["block", "ask", "allow"].includes(saved.externalImagePolicy as string)) {
         settingsStore.setExternalImagePolicy(saved.externalImagePolicy);
       }

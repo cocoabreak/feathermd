@@ -2,6 +2,7 @@ pub mod app_state;
 pub mod export;
 pub mod file;
 pub mod launch;
+pub mod local_fonts;
 pub mod menu;
 pub mod search;
 pub mod shell_integration;

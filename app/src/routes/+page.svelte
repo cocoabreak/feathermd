@@ -44,6 +44,7 @@
   import { comboFromEvent, isPickerCommand, keymap } from "$lib/commands/keymap";
   import { runCommand } from "$lib/commands/registry";
   import { startCustomCss } from "$lib/custom-css/custom-css.svelte";
+  import { startLocalFonts } from "$lib/local-fonts/local-fonts.svelte";
   import "$lib/commands/builtin";
   import { TOC_DRAWER_MEDIA_QUERY } from "$lib/responsive-toc";
   import type { DocumentSourceInfo } from "$lib/types";
@@ -68,6 +69,7 @@
   let unlistenDragDrop: UnlistenFn | undefined;
   let unlistenCliArgs: UnlistenFn | undefined;
   let stopCustomCss: (() => void) | undefined;
+  let stopLocalFonts: (() => void) | undefined;
   let unlistenCloseRequested: UnlistenFn | undefined;
   let unlistenLinkGraphOpenDocument: UnlistenFn | undefined;
   let linkGraphThemeObserver: MutationObserver | undefined;
@@ -285,6 +287,12 @@
     }
     unlistenCliArgs = cliUnlisten;
     if (sessionResult.promptRestore) sessionRestorePromptStore.show();
+    const stopFonts = await startLocalFonts();
+    if (destroyed) {
+      stopFonts();
+      return;
+    }
+    stopLocalFonts = stopFonts;
     const stopCss = await startCustomCss();
     if (destroyed) {
       stopCss();
@@ -387,6 +395,7 @@
     if (unlistenDragDrop) unlistenDragDrop();
     if (unlistenCliArgs) unlistenCliArgs();
     stopCustomCss?.();
+    stopLocalFonts?.();
     unlistenCloseRequested?.();
     unlistenLinkGraphOpenDocument?.();
     linkGraphThemeObserver?.disconnect();

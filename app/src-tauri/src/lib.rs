@@ -5,6 +5,7 @@ use commands::file::{
     AllowedRoots, ExternalEditorState, NativeDialogState, PersistentExplorerRoot,
 };
 use commands::launch::LaunchState;
+use commands::local_fonts::LocalFontState;
 use commands::search::SearchState;
 use commands::sources::{LinkIndexState, SourceRegistry};
 use commands::update::UpdateCheckerState;
@@ -44,6 +45,9 @@ pub fn run() {
     builder
         .setup(|app| {
             let _ = app.manage(WatcherWorker::new(app.handle().clone()));
+            if let Err(error) = commands::local_fonts::cleanup_local_font_candidates(app.handle()) {
+                eprintln!("failed to clean up local font candidates: {error}");
+            }
             if let Err(error) = commands::file::restore_persisted_explorer_root(
                 app.handle(),
                 app.state::<AllowedRoots>().inner(),
@@ -86,6 +90,7 @@ pub fn run() {
         .manage(PersistentExplorerRoot::new())
         .manage(NativeDialogState::new())
         .manage(ExternalEditorState::new())
+        .manage(LocalFontState::new())
         .invoke_handler(tauri::generate_handler![
             commands::file::readers::read_file,
             commands::export::save_text_export,
@@ -115,6 +120,13 @@ pub fn run() {
             commands::file::trusted_paths::is_path_allowed,
             commands::file::readers::read_image_data_url,
             commands::file::external_editor::open_in_editor,
+            commands::local_fonts::pick_local_font,
+            commands::local_fonts::get_local_font_status,
+            commands::local_fonts::read_local_font,
+            commands::local_fonts::read_local_font_candidate,
+            commands::local_fonts::commit_local_font_candidate,
+            commands::local_fonts::discard_local_font_candidate,
+            commands::local_fonts::remove_local_font,
             commands::file::readers::stat_path,
             commands::watcher::watch_path,
             commands::watcher::unwatch_path,
@@ -158,11 +170,13 @@ mod app_identity_tests {
     use std::collections::HashSet;
     use std::path::{Path, PathBuf};
 
-    const STORE_FILES: [&str; 4] = [
+    const STORE_FILES: [&str; 6] = [
         "settings.json",
         "tabs.json",
         "recent.json",
         "trusted-root.json",
+        "local-fonts/body.slot",
+        "local-fonts/code.slot",
     ];
 
     fn store_paths(app_data_root: &Path, identifier: &str) -> HashSet<PathBuf> {
@@ -174,7 +188,7 @@ mod app_identity_tests {
     }
 
     #[test]
-    fn performance_identifiers_keep_four_store_paths_disjoint() {
+    fn performance_identifiers_keep_persistent_paths_disjoint() {
         let base: serde_json::Value = serde_json::from_str(include_str!("../tauri.conf.json"))
             .expect("base config should be valid JSON");
         let normal_identifier = base["identifier"]

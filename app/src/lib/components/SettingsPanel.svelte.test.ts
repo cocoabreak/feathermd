@@ -34,6 +34,8 @@ describe("SettingsPanel", () => {
     expect(screen.getByRole("button", { name: "レンダラー" })).toBeInTheDocument();
     expect(screen.getByRole("heading", { level: 3, name: "表示" })).toBeInTheDocument();
     expect(screen.getByText("アプリ").closest("details")).toHaveAttribute("open");
+    expect(screen.getByRole("button", { name: "本文用: 選択" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "コード用: 選択" })).toBeInTheDocument();
   });
 
   it("カテゴリを切り替えて対応する設定だけを表示する", async () => {
