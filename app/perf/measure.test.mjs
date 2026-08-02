@@ -6,6 +6,7 @@ import {
   finishPerformanceLaunch,
   isProductionTauriUrl,
   measurePerformanceWorkspaceStartup,
+  seedPerformanceStores,
 } from "./measure.mjs";
 
 test("rejects a normal app race without exposing any process termination operation", () => {
@@ -47,6 +48,39 @@ test("rejects a late normal app race at a completion boundary", () => {
   assert.doesNotThrow(guard);
   assert.throws(guard, /started after performance preflight/);
   assert.equal(checks, 3);
+});
+
+test("seeds all four performance stores with isolated release markers", () => {
+  const writes = new Map();
+  const probePath = seedPerformanceStores(
+    {
+      performanceAppDataDir: "C:\\roaming\\com.example.performance",
+      runDir: "C:\\temp\\owned-run",
+    },
+    (file, contents) => writes.set(file, contents)
+  );
+  assert.equal(writes.size, 5);
+  assert.equal(
+    JSON.parse(writes.get("C:\\roaming\\com.example.performance\\settings.json")).settings.language,
+    "en"
+  );
+  assert.deepEqual(
+    JSON.parse(writes.get("C:\\roaming\\com.example.performance\\tabs.json")).tabs,
+    []
+  );
+  assert.deepEqual(
+    JSON.parse(writes.get("C:\\roaming\\com.example.performance\\recent.json")).files,
+    []
+  );
+  assert.equal(
+    JSON.parse(writes.get("C:\\roaming\\com.example.performance\\recent.json")).folders[0].title,
+    "performance-store-marker"
+  );
+  assert.equal(
+    JSON.parse(writes.get("C:\\roaming\\com.example.performance\\trusted-root.json")).root,
+    "C:/roaming/com.example.performance"
+  );
+  assert.equal(probePath, "C:\\roaming\\com.example.performance\\store-isolation-probe.md");
 });
 
 test("accepts only exact production Tauri origins", () => {

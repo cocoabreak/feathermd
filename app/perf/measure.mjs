@@ -8,6 +8,7 @@ import {
   readdirSync,
   renameSync,
   statSync,
+  writeFileSync,
 } from "node:fs";
 import os from "node:os";
 import path from "node:path";
@@ -32,6 +33,8 @@ import {
 } from "./windows-process.mjs";
 
 const STORE_NAMES = ["settings.json", "tabs.json", "recent.json", "trusted-root.json"];
+const STORE_PROBE_NAME = "store-isolation-probe.md";
+const RECENT_MARKER_TITLE = "performance-store-marker";
 export function isProductionTauriUrl(value) {
   try {
     const url = new URL(value);
@@ -63,12 +66,64 @@ export function assertNoForeignFeatherMdProcesses(appIdentity, identities) {
   assert.equal(foreign.length, 0, "another FeatherMD process started after performance preflight");
 }
 
-export function createFeatherMdBackgroundGuard(
-  appIdentity,
-  listProcesses = listProcessIdentities
-) {
-  return () =>
-    assertNoForeignFeatherMdProcesses(appIdentity, listProcesses("feathermd.exe"));
+export function createFeatherMdBackgroundGuard(appIdentity, listProcesses = listProcessIdentities) {
+  return () => assertNoForeignFeatherMdProcesses(appIdentity, listProcesses("feathermd.exe"));
+}
+
+export function seedPerformanceStores(workspace, write = writeFileSync) {
+  const stores = {
+    "settings.json": {
+      settings: { language: "en", theme: "dark", checkForUpdatesOnStartup: false },
+    },
+    "tabs.json": { tabs: [], activeIndex: null, explorer: null, expandedDirs: [] },
+    "recent.json": {
+      files: [],
+      folders: [{ path: workspace.performanceAppDataDir, title: RECENT_MARKER_TITLE }],
+      archives: [],
+    },
+    "trusted-root.json": { root: workspace.performanceAppDataDir.replaceAll("\\", "/") },
+  };
+  for (const [name, value] of Object.entries(stores)) {
+    write(path.win32.join(workspace.performanceAppDataDir, name), JSON.stringify(value));
+  }
+  const probePath = path.win32.join(workspace.performanceAppDataDir, STORE_PROBE_NAME);
+  write(probePath, "# performance store isolation probe\n");
+  return probePath;
+}
+
+async function assertTrustedRootLoaded(driver, probePath) {
+  const result = await driver.evaluate(
+    `window.__TAURI_INTERNALS__.invoke("stat_path", { path: ${JSON.stringify(probePath)} })`
+  );
+  assert.equal(result?.is_file, true, "performance trusted root store was not restored");
+}
+
+async function assertPerformanceStoresLoaded(driver, workspace) {
+  const deadline = Date.now() + 5_000;
+  let state;
+  do {
+    state = await driver.evaluate(`Promise.all([
+      window.__TAURI_INTERNALS__.invoke("load_app_state", { kind: "settings" }),
+      window.__TAURI_INTERNALS__.invoke("load_app_state", { kind: "tabs" }),
+      window.__TAURI_INTERNALS__.invoke("load_app_state", { kind: "recent" })
+    ])`);
+    if (state?.[1]?.tabs?.length === 2) break;
+    await new Promise((resolve) => globalThis.setTimeout(resolve, 50));
+  } while (Date.now() < deadline);
+  assert.equal(state?.[0]?.settings?.language, "en", "performance settings store was not loaded");
+  assert.equal(state?.[0]?.settings?.theme, "dark", "performance settings marker was not loaded");
+  assert.equal(state?.[1]?.tabs?.length, 2, "performance tabs store was not updated");
+  assert.ok(
+    state[1].tabs.every(
+      (tab) =>
+        path.win32.normalize(tab.source?.nativePath) === path.win32.normalize(workspace.runDir)
+    ),
+    "performance tabs escaped the owned run directory"
+  );
+  assert.ok(
+    state?.[2]?.folders?.some((entry) => entry.title === RECENT_MARKER_TITLE),
+    "performance recent store marker was not loaded"
+  );
 }
 
 function snapshotStores(directory) {
@@ -310,6 +365,7 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
   let operationError;
   try {
     workspace = createPerformanceWorkspace(plan);
+    const storeProbePath = seedPerformanceStores(workspace);
     const firstFixture = materializePerformanceFixture(workspace, fixture);
     const repeatFixture = materializePerformanceFixture(workspace, fixture, { variant: "repeat" });
     const launch = await launchReadyPerformanceApp(workspace);
@@ -350,6 +406,8 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
     await waitForPerformanceFixture(productionDriver, repeatFixture);
     const repeatRenderedAt = performance.now();
     assertBackgroundCondition();
+    await assertTrustedRootLoaded(productionDriver, storeProbePath);
+    await assertPerformanceStoresLoaded(productionDriver, workspace);
     assertFixtureLeaseProtection(firstFixture.path, workspace.runDir);
     assertFixtureLeaseProtection(repeatFixture.path, workspace.runDir);
     assert.ok(readdirSync(workspace.profileDir).length > 0, "WebView profile stayed empty");
