@@ -2,6 +2,27 @@
 
 All notable changes to FeatherMD are documented in this file.
 
+## [0.2.4] - 2026-08-02
+
+### Added
+
+- Added document and heading reference copying as Wiki links, Markdown links, and Source-relative paths from context menus and the command palette.
+- Added missing-image and missing-heading-anchor detection to the link inspector, including bounded validation for native folders and ZIP archives.
+- Added user-selected local fonts for Markdown body and code content, with separate slots, safe managed copies, immediate application, restart restoration, and print support.
+- Added reproducible Windows release performance tooling for frontend size, startup, rendering, and process-tree memory measurements without adding production runtime hooks.
+
+### Changed
+
+- Expanded shared document-reference and anchor handling across navigation, previews, inspection, NativeSource, and ZipSource.
+- Added report-only Windows frontend size metrics to CI and isolated performance release builds from normal application state.
+- Updated the affected Rust transitive dependency to remove a reported soundness warning.
+
+### Security
+
+- Kept local-font file selection, validation, storage, and binary loading behind fixed Rust-managed slots and a main-WebView-only Tauri capability.
+- Added release CSP support for in-memory local fonts without enabling arbitrary CSS URLs, network fonts, or the asset protocol.
+- Hardened document-reference generation and link-problem validation against path escape, syntax injection, oversized inputs, and disclosure of local absolute paths.
+
 ## [0.2.3] - 2026-07-27
 
 ### Added
@@ -66,5 +87,6 @@ The first public release of FeatherMD.
 - External images are not loaded silently under the default ask policy, and large documents do not execute rich Markdown rendering in safe mode.
 - Startup update checks contact GitHub Releases by default but do not send document contents or local file paths and can be disabled in Settings.
 
+[0.2.4]: https://github.com/cocoabreak/feathermd/releases/tag/v0.2.4
 [0.2.3]: https://github.com/cocoabreak/feathermd/releases/tag/v0.2.3
 [0.2.2]: https://github.com/cocoabreak/feathermd/releases/tag/v0.2.2
