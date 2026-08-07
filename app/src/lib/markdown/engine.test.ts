@@ -21,3 +21,33 @@ describe("Markdown render cancellation", () => {
     await expect(pending).resolves.toEqual({ html: "", frontmatter: null });
   });
 });
+
+describe("Markdown plugin integration", () => {
+  it("Callout内部でMermaidとKaTeXを既存プラグイン順序のまま描画する", async () => {
+    const result = await renderMarkdown(
+      [
+        "> [!note] Rich renderers",
+        "> Inline math: $E = mc^2$",
+        ">",
+        "> ```mermaid",
+        "> flowchart LR",
+        ">   A --> B",
+        "> ```",
+      ].join("\n"),
+      {
+        ...options,
+        renderers: {
+          ...options.renderers,
+          mermaid: true,
+          katex: true,
+          "markdown-dialects": true,
+        },
+      }
+    );
+
+    expect(result.html).toContain('class="callout callout-note"');
+    expect(result.html).toContain('class="katex"');
+    expect(result.html).toContain("mermaid-pending");
+    expect(result.html).toContain('data-code="');
+  });
+});

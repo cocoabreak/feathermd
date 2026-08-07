@@ -225,7 +225,7 @@ An inline footnote is also supported.^[Inline footnote text.]
 > [!NOTE]
 > Useful information that users should know.
 
-> [!TIP]
+> [!TIP] Custom *inline Markdown* title
 > Helpful advice for doing things better.
 
 > [!IMPORTANT]
@@ -236,6 +236,17 @@ An inline footnote is also supported.^[Inline footnote text.]
 
 > [!CAUTION]
 > Advises about risks or negative outcomes.
+
+### Obsidian Callouts and folding
+
+> [!INFO]
+> A representative Obsidian Callout type.
+
+> [!QUESTION]- Initially closed
+> This body is visible after opening the Callout.
+
+> [!EXAMPLE]+ Initially open
+> This body starts visible and remains collapsible.
 
 ### Definition list
 
