@@ -88,6 +88,22 @@ cargo clippy     # Clippy による静的解析
 - `lint` / `cargo clippy` の警告・エラーは修正してからコミットする。
 - `check` のエラーはコミット前に必ず解消する。警告も原則解消すること。
 
+### Push・PR前のセキュリティ監査（必須）
+
+最終差分を確定した後、ブランチをpushまたはPRを作成・更新する前に、CIと同じ監査をローカルで必ず実行すること。
+
+```bash
+cd app
+npm audit --audit-level=high
+
+cd src-tauri
+cargo audit
+```
+
+- `cargo audit` が未導入の場合は、事前に `cargo install cargo-audit --locked` でインストールする。
+- 監査が失敗した場合はpushせず、依存更新の影響を確認してから修正する。
+- `npm audit fix --force` は破壊的な依存変更を含む可能性があるため、自動適用せず個別に判断する。
+
 ## レビューワークフロー（必須）
 
 レビューは実装者と異なる視点を得るための工程であり、フォーマッター・静的解析・テストの代替にしない。
