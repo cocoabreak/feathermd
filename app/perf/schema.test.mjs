@@ -86,13 +86,48 @@ test("validates measured timing and memory entries", () => {
   result.memory.push({
     scenario: "plain",
     status: "measured",
-    processCount: 4,
+    processCount: 1,
     workingSetBytes: 100,
     privateMemoryBytes: 80,
+    processes: [
+      {
+        pid: 100,
+        parentPid: 1,
+        name: "feathermd.exe",
+        workingSet64: 100,
+        privateMemorySize64: 80,
+      },
+    ],
   });
   assert.doesNotThrow(() => validatePerformanceResult(result));
   delete result.timings[0].medianMs;
   assert.throws(() => validatePerformanceResult(result), /medianMs/);
+});
+
+test("rejects partial or inconsistent memory snapshots", () => {
+  const result = validResult();
+  result.memory.push({ scenario: "empty", status: "not-measured", reason: "process-missing" });
+  assert.doesNotThrow(() => validatePerformanceResult(result));
+  delete result.memory[0].reason;
+  assert.throws(() => validatePerformanceResult(result), /reason/);
+
+  result.memory[0] = {
+    scenario: "plain",
+    status: "measured",
+    processCount: 1,
+    workingSetBytes: 101,
+    privateMemoryBytes: 80,
+    processes: [
+      {
+        pid: 100,
+        parentPid: 1,
+        name: "feathermd.exe",
+        workingSet64: 100,
+        privateMemorySize64: 80,
+      },
+    ],
+  };
+  assert.throws(() => validatePerformanceResult(result), /workingSetBytes total/);
 });
 
 test("accepts sanitized public results", () => {

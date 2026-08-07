@@ -40,11 +40,11 @@
 
 ## T-004: Windowsメモリ計測
 
-- [ ] Tauri PIDを根としてWebView2を含む子孫プロセスを列挙する
-- [ ] `WorkingSet64` と `PrivateMemorySize64` を個別・合計で記録する
-- [ ] 空状態、plain表示後、rich表示後の安定時点で採取する
-- [ ] PID消失、プロセス入れ替わり、部分集計を `not-measured` として扱う
-- [ ] 模擬プロセスツリーで子孫集計、重複排除、消失時のテストを追加する
+- [x] Tauri PIDを根としてWebView2を含む子孫プロセスを列挙する
+- [x] `WorkingSet64` と `PrivateMemorySize64` を個別・合計で記録する
+- [x] 空状態、plain表示後、rich表示後の安定時点で採取する
+- [x] PID消失、プロセス入れ替わり、部分集計を `not-measured` として扱う
+- [x] 模擬プロセスツリーで子孫集計、重複排除、消失時のテストを追加する
 
 ## T-005: レポートと比較
 

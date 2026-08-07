@@ -1,6 +1,6 @@
 import path from "node:path";
 
-export const PERFORMANCE_SCHEMA_VERSION = 1;
+export const PERFORMANCE_SCHEMA_VERSION = 2;
 export const FIXTURE_VERSION = "plain-v1+rich-v1";
 
 const ABSOLUTE_PATH = /(?:^|[\s("'=])(?:[a-zA-Z]:[\\/]|\\\\|\/(?!\/))/;
@@ -14,6 +14,10 @@ function assert(condition, message) {
 
 function assertFiniteNonNegative(value, label) {
   assert(Number.isFinite(value) && value >= 0, `${label} must be a non-negative number`);
+}
+
+function assertNonNegativeInteger(value, label) {
+  assert(Number.isSafeInteger(value) && value >= 0, `${label} must be a non-negative integer`);
 }
 
 function assertString(value, label) {
@@ -35,6 +39,7 @@ function assertScenarioMetric(value, label, kind) {
     `${label}.status is invalid`
   );
   if (value.status === "failed") assertString(value.error, `${label}.error`);
+  if (value.status === "not-measured") assertString(value.reason, `${label}.reason`);
   if (value.status !== "measured") return;
   if (kind === "timing") {
     assert(Array.isArray(value.trials) && value.trials.length > 0, `${label}.trials is required`);
@@ -45,9 +50,35 @@ function assertScenarioMetric(value, label, kind) {
     assertFiniteNonNegative(value.minMs, `${label}.minMs`);
     assertFiniteNonNegative(value.maxMs, `${label}.maxMs`);
   } else {
-    assertFiniteNonNegative(value.processCount, `${label}.processCount`);
-    assertFiniteNonNegative(value.workingSetBytes, `${label}.workingSetBytes`);
-    assertFiniteNonNegative(value.privateMemoryBytes, `${label}.privateMemoryBytes`);
+    assertNonNegativeInteger(value.processCount, `${label}.processCount`);
+    assertNonNegativeInteger(value.workingSetBytes, `${label}.workingSetBytes`);
+    assertNonNegativeInteger(value.privateMemoryBytes, `${label}.privateMemoryBytes`);
+    assert(
+      Array.isArray(value.processes) && value.processes.length === value.processCount,
+      `${label}.processes must match processCount`
+    );
+    const pids = new Set();
+    let workingSetTotal = 0;
+    let privateMemoryTotal = 0;
+    value.processes.forEach((process, index) => {
+      const processLabel = `${label}.processes[${index}]`;
+      assertNonNegativeInteger(process?.pid, `${processLabel}.pid`);
+      assert(process.pid > 0, `${processLabel}.pid must be positive`);
+      assertNonNegativeInteger(process.parentPid, `${processLabel}.parentPid`);
+      assertString(process.name, `${processLabel}.name`);
+      assert(/^[a-zA-Z0-9._-]+$/.test(process.name), `${processLabel}.name is invalid`);
+      assertNonNegativeInteger(process.workingSet64, `${processLabel}.workingSet64`);
+      assertNonNegativeInteger(process.privateMemorySize64, `${processLabel}.privateMemorySize64`);
+      assert(!pids.has(process.pid), `${label}.processes contains a duplicate PID`);
+      pids.add(process.pid);
+      workingSetTotal += process.workingSet64;
+      privateMemoryTotal += process.privateMemorySize64;
+    });
+    assert(workingSetTotal === value.workingSetBytes, `${label}.workingSetBytes total is invalid`);
+    assert(
+      privateMemoryTotal === value.privateMemoryBytes,
+      `${label}.privateMemoryBytes total is invalid`
+    );
   }
 }
 
