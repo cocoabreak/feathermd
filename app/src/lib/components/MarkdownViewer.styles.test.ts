@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import source from "./MarkdownViewer.svelte?raw";
+import { CALLOUT_STYLES } from "$lib/plugins/markdown-dialects/styles";
 
 describe("MarkdownViewer styles", () => {
   it("空のMarkdownでも文書未選択表示へ戻さない", () => {
@@ -28,6 +29,15 @@ describe("MarkdownViewer styles", () => {
     expect(source).toContain(".markdown-body :global(dd)");
     expect(source).toContain(".markdown-body :global(.footnotes)");
     expect(source).toContain(".markdown-body :global(.footnote-backref)");
+  });
+
+  it("Calloutのテーマ・折りたたみ・印刷スタイルを含む", () => {
+    expect(CALLOUT_STYLES).toContain(".markdown-body .callout");
+    expect(CALLOUT_STYLES).toContain(".dark .markdown-body .callout");
+    expect(CALLOUT_STYLES).toContain("details.callout > summary.callout-title");
+    expect(CALLOUT_STYLES).toContain(".callout-danger");
+    expect(CALLOUT_STYLES).toContain("details.callout:not([open]) > :not(summary)");
+    expect(CALLOUT_STYLES).toContain("display: block !important");
   });
 
   it("MermaidのノードラベルだけをMermaid既定の行高へ戻す", () => {

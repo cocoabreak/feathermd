@@ -1,7 +1,4 @@
 @import "tailwindcss";
-@import "markdown-it-github-alerts/styles/github-base.css";
-@import "markdown-it-github-alerts/styles/github-colors-light.css";
-@import "markdown-it-github-alerts/styles/github-colors-dark-class.css";
 
 /* shadcn-svelte カラーシステム（HSL値） */
 @layer base {

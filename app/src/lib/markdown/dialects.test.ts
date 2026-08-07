@@ -25,8 +25,8 @@ describe("Markdown dialects", () => {
     (type) => {
       const html = render(`> [!${type}]\n> Alert body`);
 
-      expect(html).toContain(`class="markdown-alert markdown-alert-${type.toLowerCase()}"`);
-      expect(html).toContain('class="markdown-alert-title"');
+      expect(html).toContain(`class="callout callout-${type.toLowerCase()}"`);
+      expect(html).toContain('class="callout-title"');
       expect(html).toContain("<svg");
       expect(html).toContain("Alert body");
     }

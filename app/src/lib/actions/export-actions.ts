@@ -8,6 +8,7 @@ import { explorerStore } from "$lib/stores/explorer.svelte";
 import { settingsStore } from "$lib/stores/settings.svelte";
 import { areExternalImagesApprovedForDocument } from "$lib/stores/external-image-permission";
 import { waitForLocalFonts } from "$lib/local-fonts/local-fonts.svelte";
+import { CALLOUT_STYLES } from "$lib/plugins/markdown-dialects/styles";
 
 export const MAX_PNG_DIMENSION = 16_384;
 export const MAX_PNG_PIXELS = 25_000_000;
@@ -125,6 +126,7 @@ export async function saveAsHtml(title: string, renderedHtml: string) {
     tr:nth-child(2n) {
       background-color: #f6f8fa;
     }
+${CALLOUT_STYLES}
   </style>
 </head>
 <body class="markdown-body">

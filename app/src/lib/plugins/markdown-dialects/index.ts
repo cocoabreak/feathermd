@@ -1,8 +1,9 @@
 // @ts-expect-error: package does not bundle TypeScript declarations
 import deflist from "markdown-it-deflist";
 import footnote from "markdown-it-footnote";
-import githubAlerts from "markdown-it-github-alerts";
 import type { ViewerPlugin } from "$lib/plugins/types";
+import { installCallouts } from "./callouts";
+import { ensureCalloutStyles } from "./styles";
 
 const plugin: ViewerPlugin = {
   name: "markdown-dialects",
@@ -19,7 +20,10 @@ const plugin: ViewerPlugin = {
   extendMarkdownIt(md) {
     md.use(footnote);
     md.use(deflist);
-    md.use(githubAlerts);
+    installCallouts(md);
+  },
+  postRender(container) {
+    ensureCalloutStyles(container);
   },
 };
 
