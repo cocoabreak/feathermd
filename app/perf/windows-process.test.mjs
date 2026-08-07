@@ -7,13 +7,16 @@ import {
   namedMutexExists,
   namedMutexQueryPlan,
   parseProcessIdentity,
+  parseProcessMemorySnapshot,
   processIdentityQueryPlan,
   processDetailsQueryPlan,
   processListQueryPlan,
+  processMemorySnapshotQueryPlan,
   queryRoamingAppData,
   queryProcessIdentity,
   queryLoopbackListenerOwner,
   queryProcessDetails,
+  queryProcessMemorySnapshot,
   roamingAppDataQueryPlan,
 } from "./windows-process.mjs";
 
@@ -155,5 +158,89 @@ test("requires the CDP listener to be the app child with its port and profile", 
         port: 41_237,
       }),
     /direct child/
+  );
+});
+
+test("queries one Windows process and memory snapshot without a shell", () => {
+  const plan = processMemorySnapshotQueryPlan();
+  assert.match(plan.args.at(-1), /Get-CimInstance Win32_Process/);
+  assert.match(plan.args.at(-1), /StartTime\.ToUniversalTime\(\)\.Ticks/);
+  assert.match(plan.args.at(-1), /runtimeCreatedTicks % 10/);
+  assert.match(plan.args.at(-1), /live\.creationTimeTicks -eq \$createdTicks/);
+  assert.match(plan.args.at(-1), /WorkingSet64/);
+  assert.match(plan.args.at(-1), /PrivateMemorySize64/);
+  assert.equal(plan.options.shell, undefined);
+
+  const output = JSON.stringify([
+    {
+      ...identity,
+      executablePath: "C:\\Build\\feathermd.exe",
+      commandLine: "feathermd.exe",
+      workingSet64: 4096,
+      privateMemorySize64: 2048,
+    },
+    {
+      pid: 5151,
+      parentPid: 4242,
+      creationTime: null,
+      executablePath: "",
+      commandLine: "",
+      workingSet64: null,
+      privateMemorySize64: null,
+    },
+  ]);
+  assert.deepEqual(parseProcessMemorySnapshot(output), [
+    {
+      ...identity,
+      commandLine: "feathermd.exe",
+      workingSet64: 4096,
+      privateMemorySize64: 2048,
+    },
+    {
+      pid: 5151,
+      parentPid: 4242,
+      creationTime: null,
+      executablePath: null,
+      commandLine: null,
+      workingSet64: null,
+      privateMemorySize64: null,
+    },
+  ]);
+  assert.equal(queryProcessMemorySnapshot(() => ({ status: 0, stdout: output })).length, 2);
+  const reusedPidOutput = JSON.stringify([
+    {
+      ...identity,
+      workingSet64: null,
+      privateMemorySize64: null,
+    },
+  ]);
+  assert.deepEqual(parseProcessMemorySnapshot(reusedPidOutput)[0], {
+    ...identity,
+    commandLine: null,
+    workingSet64: null,
+    privateMemorySize64: null,
+  });
+  assert.equal(
+    parseProcessMemorySnapshot(
+      JSON.stringify([
+        {
+          pid: 0,
+          parentPid: 0,
+          creationTime: null,
+          executablePath: "",
+          commandLine: "",
+          workingSet64: 0,
+          privateMemorySize64: 0,
+        },
+      ])
+    )[0].pid,
+    0
+  );
+  assert.throws(
+    () =>
+      parseProcessMemorySnapshot(
+        JSON.stringify([{ ...identity, workingSet64: -1, privateMemorySize64: 2 }])
+      ),
+    /WorkingSet64/
   );
 });

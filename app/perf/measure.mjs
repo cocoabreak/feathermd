@@ -21,6 +21,7 @@ import {
   waitForPerformanceFixture,
 } from "./fixture-render.mjs";
 import { materializePerformanceFixture, validatePerformanceFixtures } from "./fixtures.mjs";
+import { collectStableProcessTreeMemory } from "./memory.mjs";
 import { preparePerformanceLaunch } from "./runner.mjs";
 import { cleanupPerformanceWorkspace, createPerformanceWorkspace } from "./run-workspace.mjs";
 import { launchPerformanceJob } from "./windows-job.mjs";
@@ -311,6 +312,7 @@ export async function launchReadyPerformanceApp(workspace) {
       job,
       productionDriver,
       appIdentity,
+      listenerProcess,
       assertBackgroundCondition,
       startupRequestedAt,
       startupReadyAt,
@@ -323,6 +325,75 @@ export async function launchReadyPerformanceApp(workspace) {
     const cleanupErrors = await finishPerformanceLaunch([], job, undefined, cleanupSafe);
     throwPerformanceErrors(error, cleanupErrors, cleanupSafe);
   }
+}
+
+const MEMORY_FIXTURE_IDS = {
+  empty: null,
+  plain: "plain-v1",
+  rich: "rich-v1",
+};
+
+export async function measurePerformanceMemoryScenario(
+  { scenario } = {},
+  {
+    allocatePort = findFreePort,
+    prepareLaunch = preparePerformanceLaunch,
+    createWorkspace = createPerformanceWorkspace,
+    launchReady = launchReadyPerformanceApp,
+    collectMemory = collectStableProcessTreeMemory,
+    materializeFixture = materializePerformanceFixture,
+    waitForTab = waitForNewActiveTab,
+    waitForFixture = waitForPerformanceFixture,
+    finish = finishPerformanceLaunch,
+  } = {}
+) {
+  if (!Object.hasOwn(MEMORY_FIXTURE_IDS, scenario)) {
+    throw new Error("unsupported performance memory scenario");
+  }
+  const fixtureId = MEMORY_FIXTURE_IDS[scenario];
+  const fixture = fixtureId
+    ? validatePerformanceFixtures().find((candidate) => candidate.id === fixtureId)
+    : null;
+  if (fixtureId) assert.ok(fixture, `performance fixture is unavailable: ${fixtureId}`);
+
+  let workspace;
+  let job;
+  const fixtureLeases = [];
+  let cleanupSafe = true;
+  let result;
+  let operationError;
+  try {
+    const port = await allocatePort();
+    const plan = prepareLaunch({
+      port,
+      runDir: path.win32.join(os.tmpdir(), "feathermd-performance-memory-planned"),
+    });
+    workspace = createWorkspace(plan);
+    const materializedFixture = fixture ? materializeFixture(workspace, fixture) : null;
+    const launch = await launchReady(workspace);
+    job = launch.job;
+    if (materializedFixture) {
+      launch.assertBackgroundCondition();
+      const fixtureLease = await job.openFixture(materializedFixture);
+      fixtureLeases.push(fixtureLease);
+      await waitForTab(launch.productionDriver, launch.initialTabId, materializedFixture.fileName);
+      await waitForFixture(launch.productionDriver, materializedFixture);
+    }
+    launch.assertBackgroundCondition();
+    result = await collectMemory({
+      scenario,
+      rootIdentity: launch.appIdentity,
+      requiredIdentities: [launch.listenerProcess],
+      ownedProfileDir: workspace.profileDir,
+    });
+    launch.assertBackgroundCondition();
+  } catch (error) {
+    if (error?.performanceWorkspaceCleanupSafe === false) cleanupSafe = false;
+    operationError = error;
+  }
+  const cleanupErrors = await finish(fixtureLeases, job, workspace, cleanupSafe);
+  throwPerformanceErrors(operationError, cleanupErrors, cleanupSafe);
+  return result;
 }
 
 export async function measurePerformanceWorkspaceStartup(

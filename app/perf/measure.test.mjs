@@ -5,6 +5,7 @@ import {
   createFeatherMdBackgroundGuard,
   finishPerformanceLaunch,
   isProductionTauriUrl,
+  measurePerformanceMemoryScenario,
   measurePerformanceWorkspaceStartup,
   seedPerformanceStores,
 } from "./measure.mjs";
@@ -210,4 +211,86 @@ test("keeps reusable workspace cleanup safe after a confirmed trial shutdown fai
       actual.performanceWorkspaceCleanupSafe !== false
   );
   assert.equal(receivedCleanupSafe, true);
+});
+
+test("measures fixture memory after opening it through the owned CLI path", async () => {
+  const workspace = {
+    runDir: "C:\\temp\\memory-owned",
+    profileDir: "C:\\temp\\memory-owned\\profile",
+  };
+  const appIdentity = {
+    pid: 100,
+    creationTime: "2026-08-01T00:00:00.000Z",
+    executablePath: "c:\\build\\feathermd.exe",
+  };
+  const listenerProcess = {
+    pid: 200,
+    creationTime: "2026-08-01T00:00:01.000Z",
+    executablePath: "c:\\webview2\\msedgewebview2.exe",
+  };
+  const events = [];
+  const lease = { release: async () => {} };
+  const job = {
+    openFixture: async (fixture) => {
+      events.push(["open", fixture.id]);
+      return lease;
+    },
+  };
+  const result = await measurePerformanceMemoryScenario(
+    { scenario: "plain" },
+    {
+      allocatePort: async () => 41_237,
+      prepareLaunch: () => ({ prepared: true }),
+      createWorkspace: () => workspace,
+      materializeFixture: (actualWorkspace, fixture) => {
+        assert.equal(actualWorkspace, workspace);
+        return { ...fixture, fileName: "plain.md", path: "C:\\temp\\memory-owned\\plain.md" };
+      },
+      launchReady: async () => ({
+        job,
+        productionDriver: {},
+        initialTabId: null,
+        appIdentity,
+        listenerProcess,
+        assertBackgroundCondition: () => events.push(["guard"]),
+      }),
+      waitForTab: async (driver, previousTabId, fileName) => {
+        assert.equal(previousTabId, null);
+        assert.equal(fileName, "plain.md");
+        events.push(["tab"]);
+      },
+      waitForFixture: async (driver, fixture) => events.push(["render", fixture.id]),
+      collectMemory: async (options) => {
+        assert.equal(options.scenario, "plain");
+        assert.equal(options.rootIdentity, appIdentity);
+        assert.deepEqual(options.requiredIdentities, [listenerProcess]);
+        assert.equal(options.ownedProfileDir, workspace.profileDir);
+        events.push(["memory"]);
+        return { scenario: "plain", status: "not-measured", reason: "injected" };
+      },
+      finish: async (leases, actualJob, actualWorkspace, cleanupSafe) => {
+        assert.deepEqual(leases, [lease]);
+        assert.equal(actualJob, job);
+        assert.equal(actualWorkspace, workspace);
+        assert.equal(cleanupSafe, true);
+        events.push(["finish"]);
+        return [];
+      },
+    }
+  );
+  assert.deepEqual(result, {
+    scenario: "plain",
+    status: "not-measured",
+    reason: "injected",
+  });
+  assert.deepEqual(events, [
+    ["guard"],
+    ["open", "plain-v1"],
+    ["tab"],
+    ["render", "plain-v1"],
+    ["guard"],
+    ["memory"],
+    ["guard"],
+    ["finish"],
+  ]);
 });

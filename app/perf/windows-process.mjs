@@ -98,6 +98,39 @@ export function processListQueryPlan(executableName) {
   };
 }
 
+export function processMemorySnapshotQueryPlan() {
+  const script = [
+    "$runtime = @{}",
+    "@(Get-Process -ErrorAction SilentlyContinue) | ForEach-Object {",
+    "try {",
+    "$runtimeCreatedTicks = [long]$_.StartTime.ToUniversalTime().Ticks",
+    "$runtimeCreatedMicrosecondTicks = $runtimeCreatedTicks - ($runtimeCreatedTicks % 10)",
+    "$runtime[[int]$_.Id] = [pscustomobject]@{ creationTimeTicks = $runtimeCreatedMicrosecondTicks; workingSet64 = [long]$_.WorkingSet64; privateMemorySize64 = [long]$_.PrivateMemorySize64 }",
+    "} catch {}",
+    "}",
+    "$processes = @(Get-CimInstance Win32_Process | ForEach-Object {",
+    "$pidValue = [int]$_.ProcessId",
+    "$live = $runtime[$pidValue]",
+    "$created = if ($null -eq $_.CreationDate) { $null } else { $_.CreationDate.ToUniversalTime().ToString('O') }",
+    "$createdTicks = if ($null -eq $_.CreationDate) { $null } else { [long]$_.CreationDate.ToUniversalTime().Ticks }",
+    "$identityMatches = $null -ne $live -and $null -ne $createdTicks -and $live.creationTimeTicks -eq $createdTicks",
+    "$workingSet = if ($identityMatches) { [long]$live.workingSet64 } else { $null }",
+    "$privateMemory = if ($identityMatches) { [long]$live.privateMemorySize64 } else { $null }",
+    "[pscustomobject]@{ pid = $pidValue; parentPid = [int]$_.ParentProcessId; creationTime = $created; executablePath = [string]$_.ExecutablePath; commandLine = [string]$_.CommandLine; workingSet64 = $workingSet; privateMemorySize64 = $privateMemory }",
+    "})",
+    "ConvertTo-Json -Compress -InputObject $processes",
+  ].join("; ");
+  return {
+    command: windowsPowerShell,
+    args: ["-NoProfile", "-NonInteractive", "-Command", script],
+    options: {
+      encoding: "utf8",
+      timeout: QUERY_TIMEOUT_MS,
+      windowsHide: true,
+    },
+  };
+}
+
 export function namedMutexQueryPlan(mutexName) {
   if (typeof mutexName !== "string" || !/^[a-zA-Z0-9.-]+-sim$/.test(mutexName)) {
     throw new Error("single-instance mutex name is invalid");
@@ -158,6 +191,58 @@ export function parseProcessIdentity(output) {
     creationTime: parsed.creationTime,
     executablePath: normalizeExecutablePath(parsed.executablePath),
   };
+}
+
+function parseOptionalMemoryBytes(value, label) {
+  if (value === null) return null;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    throw new Error(`Windows process memory query returned invalid ${label}`);
+  }
+  return value;
+}
+
+export function parseProcessMemorySnapshot(output) {
+  let parsed;
+  try {
+    parsed = JSON.parse(output);
+  } catch {
+    throw new Error("Windows process memory query returned invalid JSON");
+  }
+  if (!Array.isArray(parsed)) {
+    throw new Error("Windows process memory query did not return an array");
+  }
+  return parsed.map((entry) => {
+    if (!Number.isInteger(entry?.pid) || entry.pid < 0) {
+      throw new Error("Windows process memory query returned an invalid PID");
+    }
+    if (!Number.isInteger(entry.parentPid) || entry.parentPid < 0) {
+      throw new Error("Windows process memory query returned an invalid parent PID");
+    }
+    const creationTime =
+      typeof entry.creationTime === "string" && !Number.isNaN(Date.parse(entry.creationTime))
+        ? entry.creationTime
+        : null;
+    const executablePath =
+      typeof entry.executablePath === "string" && path.win32.isAbsolute(entry.executablePath)
+        ? normalizeExecutablePath(entry.executablePath)
+        : null;
+    const commandLine =
+      typeof entry.commandLine === "string" && entry.commandLine.length > 0
+        ? entry.commandLine
+        : null;
+    return {
+      pid: entry.pid,
+      parentPid: entry.parentPid,
+      creationTime,
+      executablePath,
+      commandLine,
+      workingSet64: parseOptionalMemoryBytes(entry.workingSet64, "WorkingSet64"),
+      privateMemorySize64: parseOptionalMemoryBytes(
+        entry.privateMemorySize64,
+        "PrivateMemorySize64"
+      ),
+    };
+  });
 }
 
 export function queryProcessIdentity(pid, execute = spawnSync) {
@@ -249,6 +334,16 @@ export function listProcessIdentities(executableName, execute = spawnSync) {
   }
   if (!Array.isArray(parsed)) throw new Error("Windows process list query did not return an array");
   return parsed.map((entry) => parseProcessIdentity(JSON.stringify(entry)));
+}
+
+export function queryProcessMemorySnapshot(execute = spawnSync) {
+  const plan = processMemorySnapshotQueryPlan();
+  const result = execute(plan.command, plan.args, plan.options);
+  if (result.error) throw result.error;
+  if (result.status !== 0) {
+    throw new Error(`Windows process memory query failed with exit code ${result.status}`);
+  }
+  return parseProcessMemorySnapshot(result.stdout);
 }
 
 export function namedMutexExists(mutexName, execute = spawnSync) {
