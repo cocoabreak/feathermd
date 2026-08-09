@@ -1,0 +1,469 @@
+{
+  "schemaVersion": 3,
+  "fixtureVersion": "plain-v1+rich-v1",
+  "measuredAt": "2026-08-09T07:27:07.184Z",
+  "source": {
+    "commit": "a979f1a0c4cc3b2eae64ff128aa5fef25d4fa94f",
+    "appVersion": "0.2.4",
+    "dirty": false
+  },
+  "environment": {
+    "id": "windows-x64-i9-9900k-64gb-sata-2026-08",
+    "os": "Windows 11 Pro 10.0.26200 (build 26200)",
+    "architecture": "x64",
+    "node": "v24.18.0",
+    "measurement": "release-qa",
+    "cpuModel": "Intel Core i9-9900K @ 3.60GHz",
+    "logicalProcessors": 16,
+    "physicalMemoryBytes": 68525785088,
+    "storage": "SATA SSD",
+    "webView2": "151.0.4129.72",
+    "rust": "rustc 1.96.0",
+    "tauriCli": "2.11.4",
+    "backgroundCondition": "FeatherMD absent; foreground QA run"
+  },
+  "build": {
+    "total": {
+      "fileCount": 237,
+      "rawBytes": 8734210,
+      "brotliBytes": 2379635
+    },
+    "byType": {
+      "javascript": {
+        "fileCount": 170,
+        "rawBytes": 7570581,
+        "brotliBytes": 1502263
+      },
+      "css": {
+        "fileCount": 2,
+        "rawBytes": 69775,
+        "brotliBytes": 14155
+      },
+      "image": {
+        "fileCount": 4,
+        "rawBytes": 19467,
+        "brotliBytes": 15925
+      },
+      "font": {
+        "fileCount": 59,
+        "rawBytes": 1072948,
+        "brotliBytes": 846843
+      },
+      "other": {
+        "fileCount": 2,
+        "rawBytes": 1439,
+        "brotliBytes": 449
+      }
+    },
+    "initial": {
+      "fileCount": 10,
+      "rawBytes": 200914,
+      "brotliBytes": 59014
+    },
+    "lazy": {
+      "fileCount": 220,
+      "rawBytes": 8511946,
+      "brotliBytes": 2303996
+    },
+    "largestFiles": [
+      {
+        "file": "_app/immutable/nodes/2.BrGzBD5z.js",
+        "type": "javascript",
+        "rawBytes": 970385,
+        "brotliBytes": 238990
+      },
+      {
+        "file": "_app/immutable/chunks/BfrZ3jm6.js",
+        "type": "javascript",
+        "rawBytes": 662694,
+        "brotliBytes": 114338
+      },
+      {
+        "file": "_app/immutable/chunks/C6kVkrIJ2.js",
+        "type": "javascript",
+        "rawBytes": 637547,
+        "brotliBytes": 19827
+      },
+      {
+        "file": "_app/immutable/chunks/B3I8pqwA.js",
+        "type": "javascript",
+        "rawBytes": 435314,
+        "brotliBytes": 115526
+      },
+      {
+        "file": "_app/immutable/chunks/CTb29epj.js",
+        "type": "javascript",
+        "rawBytes": 264366,
+        "brotliBytes": 63406
+      },
+      {
+        "file": "_app/immutable/chunks/CddkPoXu2.js",
+        "type": "javascript",
+        "rawBytes": 258881,
+        "brotliBytes": 63082
+      },
+      {
+        "file": "_app/immutable/chunks/Bl2xMUIU.js",
+        "type": "javascript",
+        "rawBytes": 257774,
+        "brotliBytes": 62950
+      },
+      {
+        "file": "_app/immutable/chunks/A3ubFIc_.js",
+        "type": "javascript",
+        "rawBytes": 207773,
+        "brotliBytes": 18795
+      },
+      {
+        "file": "_app/immutable/chunks/C1so8e5-.js",
+        "type": "javascript",
+        "rawBytes": 196786,
+        "brotliBytes": 64295
+      },
+      {
+        "file": "_app/immutable/chunks/CVajYEOA2.js",
+        "type": "javascript",
+        "rawBytes": 181130,
+        "brotliBytes": 11516
+      },
+      {
+        "file": "_app/immutable/chunks/CUsWKacj2.js",
+        "type": "javascript",
+        "rawBytes": 177842,
+        "brotliBytes": 12014
+      },
+      {
+        "file": "_app/immutable/chunks/D00Q9fjZ2.js",
+        "type": "javascript",
+        "rawBytes": 175586,
+        "brotliBytes": 11976
+      },
+      {
+        "file": "_app/immutable/chunks/DAzcFlug2.js",
+        "type": "javascript",
+        "rawBytes": 174877,
+        "brotliBytes": 11990
+      },
+      {
+        "file": "_app/immutable/chunks/CkPEO5Z82.js",
+        "type": "javascript",
+        "rawBytes": 149189,
+        "brotliBytes": 34748
+      },
+      {
+        "file": "_app/immutable/chunks/BLCT4AmU.js",
+        "type": "javascript",
+        "rawBytes": 115770,
+        "brotliBytes": 25029
+      },
+      {
+        "file": "_app/immutable/chunks/vJXrIKYc.js",
+        "type": "javascript",
+        "rawBytes": 113895,
+        "brotliBytes": 33618
+      },
+      {
+        "file": "_app/immutable/chunks/BY8ePeYn2.js",
+        "type": "javascript",
+        "rawBytes": 101772,
+        "brotliBytes": 20812
+      },
+      {
+        "file": "_app/immutable/chunks/oqKa8noW2.js",
+        "type": "javascript",
+        "rawBytes": 90182,
+        "brotliBytes": 8978
+      },
+      {
+        "file": "_app/immutable/chunks/D9qzUYT3.js",
+        "type": "javascript",
+        "rawBytes": 88961,
+        "brotliBytes": 9436
+      },
+      {
+        "file": "_app/immutable/chunks/BnAgAxFn.js",
+        "type": "javascript",
+        "rawBytes": 81406,
+        "brotliBytes": 18552
+      }
+    ],
+    "featureGroups": {
+      "katex": {
+        "fileCount": 63,
+        "rawBytes": 1908215,
+        "brotliBytes": 1054897
+      },
+      "mermaid": {
+        "fileCount": 103,
+        "rawBytes": 3450733,
+        "brotliBytes": 823514
+      },
+      "shiki": {
+        "fileCount": 47,
+        "rawBytes": 2393647,
+        "brotliBytes": 230118
+      }
+    },
+    "distributions": {
+      "executable": {
+        "status": "measured",
+        "rawBytes": 8572416
+      },
+      "msi": {
+        "status": "measured",
+        "rawBytes": 5881856
+      },
+      "nsis": {
+        "status": "measured",
+        "rawBytes": 4760917
+      },
+      "portableZip": {
+        "status": "measured",
+        "rawBytes": 5340367
+      }
+    },
+    "type": "windows-x64-release-qa"
+  },
+  "timings": [
+    {
+      "scenario": "startup-cold",
+      "status": "measured",
+      "trials": [3709.065, 2952.911, 2930.749, 2902.645, 2963.461],
+      "medianMs": 2952.911,
+      "minMs": 2902.645,
+      "maxMs": 3709.065
+    },
+    {
+      "scenario": "ready-to-fixture-request-plain",
+      "status": "measured",
+      "trials": [851.492, 775.112, 760.6, 762.387, 764.064],
+      "medianMs": 764.064,
+      "minMs": 760.6,
+      "maxMs": 851.492
+    },
+    {
+      "scenario": "first-render-plain",
+      "status": "measured",
+      "trials": [496.594, 473.583, 493.146, 481.247, 477.202],
+      "medianMs": 481.247,
+      "minMs": 473.583,
+      "maxMs": 496.594
+    },
+    {
+      "scenario": "repeat-render-plain",
+      "status": "measured",
+      "trials": [478.164, 464.574, 466.422, 450.065, 526.351],
+      "medianMs": 466.422,
+      "minMs": 450.065,
+      "maxMs": 526.351
+    },
+    {
+      "scenario": "ready-to-fixture-request-rich",
+      "status": "measured",
+      "trials": [745.877, 795.896, 800.49, 763.468, 783.206],
+      "medianMs": 783.206,
+      "minMs": 745.877,
+      "maxMs": 800.49
+    },
+    {
+      "scenario": "first-render-rich",
+      "status": "measured",
+      "trials": [716.22, 678.851, 677.272, 701.892, 711.018],
+      "medianMs": 701.892,
+      "minMs": 677.272,
+      "maxMs": 716.22
+    },
+    {
+      "scenario": "repeat-render-rich",
+      "status": "measured",
+      "trials": [572.482, 580.431, 489.818, 581.622, 585.825],
+      "medianMs": 580.431,
+      "minMs": 489.818,
+      "maxMs": 585.825
+    },
+    {
+      "scenario": "startup-warm",
+      "status": "measured",
+      "trials": [3025.665, 3037.7, 3088.32, 2988.281, 3077.758],
+      "medianMs": 3037.7,
+      "minMs": 2988.281,
+      "maxMs": 3088.32
+    }
+  ],
+  "memory": [
+    {
+      "scenario": "empty",
+      "status": "measured",
+      "processCount": 7,
+      "workingSetBytes": 489152512,
+      "privateMemoryBytes": 296882176,
+      "processes": [
+        {
+          "pid": 37044,
+          "parentPid": 43012,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 10625024,
+          "privateMemorySize64": 2490368
+        },
+        {
+          "pid": 42772,
+          "parentPid": 43012,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 135397376,
+          "privateMemorySize64": 108957696
+        },
+        {
+          "pid": 43012,
+          "parentPid": 61568,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 154947584,
+          "privateMemorySize64": 52781056
+        },
+        {
+          "pid": 47592,
+          "parentPid": 43012,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 21319680,
+          "privateMemorySize64": 9760768
+        },
+        {
+          "pid": 61568,
+          "parentPid": 71140,
+          "name": "feathermd.exe",
+          "workingSet64": 45375488,
+          "privateMemorySize64": 12558336
+        },
+        {
+          "pid": 67368,
+          "parentPid": 43012,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 79224832,
+          "privateMemorySize64": 95703040
+        },
+        {
+          "pid": 86632,
+          "parentPid": 43012,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 42262528,
+          "privateMemorySize64": 14630912
+        }
+      ]
+    },
+    {
+      "scenario": "plain",
+      "status": "measured",
+      "processCount": 7,
+      "workingSetBytes": 496402432,
+      "privateMemoryBytes": 304549888,
+      "processes": [
+        {
+          "pid": 21220,
+          "parentPid": 49808,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 144773120,
+          "privateMemorySize64": 115007488
+        },
+        {
+          "pid": 23964,
+          "parentPid": 49808,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 80510976,
+          "privateMemorySize64": 98234368
+        },
+        {
+          "pid": 38568,
+          "parentPid": 49808,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 42479616,
+          "privateMemorySize64": 14831616
+        },
+        {
+          "pid": 49808,
+          "parentPid": 50400,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 150843392,
+          "privateMemorySize64": 51421184
+        },
+        {
+          "pid": 50400,
+          "parentPid": 58692,
+          "name": "feathermd.exe",
+          "workingSet64": 45858816,
+          "privateMemorySize64": 12783616
+        },
+        {
+          "pid": 52008,
+          "parentPid": 49808,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 21319680,
+          "privateMemorySize64": 9781248
+        },
+        {
+          "pid": 68936,
+          "parentPid": 49808,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 10616832,
+          "privateMemorySize64": 2490368
+        }
+      ]
+    },
+    {
+      "scenario": "rich",
+      "status": "measured",
+      "processCount": 7,
+      "workingSetBytes": 520110080,
+      "privateMemoryBytes": 315637760,
+      "processes": [
+        {
+          "pid": 9236,
+          "parentPid": 47892,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 40734720,
+          "privateMemorySize64": 14610432
+        },
+        {
+          "pid": 29208,
+          "parentPid": 47892,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 82022400,
+          "privateMemorySize64": 99418112
+        },
+        {
+          "pid": 36660,
+          "parentPid": 47892,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 168075264,
+          "privateMemorySize64": 124534784
+        },
+        {
+          "pid": 41804,
+          "parentPid": 47892,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 10612736,
+          "privateMemorySize64": 2490368
+        },
+        {
+          "pid": 47892,
+          "parentPid": 52220,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 151068672,
+          "privateMemorySize64": 51589120
+        },
+        {
+          "pid": 52220,
+          "parentPid": 39272,
+          "name": "feathermd.exe",
+          "workingSet64": 46268416,
+          "privateMemorySize64": 13221888
+        },
+        {
+          "pid": 70552,
+          "parentPid": 47892,
+          "name": "msedgewebview2.exe",
+          "workingSet64": 21327872,
+          "privateMemorySize64": 9773056
+        }
+      ]
+    }
+  ]
+}

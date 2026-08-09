@@ -188,7 +188,7 @@ function summarizeNames(names, outputByName) {
   return summarize([...names].map((name) => outputByName.get(name)).filter(Boolean));
 }
 
-function collectDistributions(distributionPaths = {}) {
+export function collectDistributionMetrics(distributionPaths = {}) {
   const result = {};
   for (const kind of ["executable", "msi", "nsis", "portableZip"]) {
     const file = distributionPaths[kind];
@@ -273,7 +273,7 @@ export function collectBuildMetrics({ buildDir, distributionPaths = {} }) {
       .sort((left, right) => right.rawBytes - left.rawBytes || left.file.localeCompare(right.file))
       .slice(0, 20),
     featureGroups,
-    distributions: collectDistributions(distributionPaths),
+    distributions: collectDistributionMetrics(distributionPaths),
   };
 }
 

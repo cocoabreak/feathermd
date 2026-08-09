@@ -186,3 +186,11 @@ Windows実機でのrelease計測と結果確認は `docs/releases/windows-perfor
 - production境界: 計測専用フック、fixture、個人環境情報がproductionバンドルへ含まれないことを確認する
 
 初回ベースライン取得後、サイズ、起動、描画、メモリの主要コストを特定し、効果・リスク・実装コストで軽量化候補を順位付けする。改善を実施する場合は候補ごとに後続Issueを作成し、効果を同じ計測で再確認する。
+
+## 11. 初回Windows releaseベースライン（2026-08）
+
+commit `a979f1a0c4cc3b2eae64ff128aa5fef25d4fa94f`、FeatherMD 0.2.4、環境ID `windows-x64-i9-9900k-64gb-sata-2026-08` で初回releaseベースラインを確定した。機械可読値は `app/perf/baselines/windows-x64-i9-9900k-64gb-sata-2026-08.json`、環境、再現性、主要コスト、判断理由を含む要約は同名のMarkdownに保存する。
+
+同じcommitと環境でtimingとmemoryを2回ずつ実行し、全試行が成功した。run間の中央値差は起動で最大5.23%、描画で最大1.50%、memoryで最大1.31%だった。個別試行と1回目のcold起動に含まれた高い値は削除せずJSONへ保持する。今後のWindows release QAは同じ環境ID、schema、fixture、build typeで比較し、起動は少なくとも今回観測した変動を考慮する。
+
+主要候補は、起動区間の分解とwarm停滞（#35）、KaTeXフォント形式（#36）、Mermaid遅延バンドル（#37）の順とした。ShikiはADR-008で既に言語を限定し、Brotli値に対して対応言語削減のリスクが高いため、新しい利用・timing根拠が得られるまで追加削減を見送る。CIサイズ上限はベースライン実装と分離し、#38で扱う。
