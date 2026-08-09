@@ -112,13 +112,13 @@ Windowsのプロセス情報から、起動したTauri PIDを根として子孫P
 
 `SIGINT` / `SIGTERM` は現在のシナリオのJob終了とworkspace後始末が完了した境界で反映し、後続シナリオを開始しない。終了または後始末の所有安全性を確認できないエラーでも後続シナリオを停止する。
 
-公開結果にはPID、親PID、実行ファイル名、個別の`WorkingSet64` / `PrivateMemorySize64`、プロセス数と合計値だけを含める。実行ファイルの絶対パスとコマンドラインは所有確認にだけ使用し、結果へ保存しない。個別値を必須化したため結果スキーマはversion 2とする。
+公開結果にはPID、親PID、実行ファイル名、個別の`WorkingSet64` / `PrivateMemorySize64`、プロセス数と合計値だけを含める。実行ファイルの絶対パスとコマンドラインは所有確認にだけ使用し、結果へ保存しない。個別値を必須化したversion 2に続き、比較互換性を明示する環境IDとビルド種別を必須化した結果スキーマをversion 3とする。
 
 メモリはガベージコレクションを強制せず、実利用状態を観測する。OSやWebView2の揺らぎが大きいためCIゲートにはせず、同一Windows基準環境のリリースQA比較に使用する。
 
 ## 7. 結果とベースライン
 
-生結果は `app/perf/artifacts/result.json`、人間向け要約は `app/perf/artifacts/summary.md` へ生成し、gitignore対象とする。JSONは概ね次の構造を持つ。
+生結果は `app/perf/artifacts/result.json`、機械可読な比較結果は `app/perf/artifacts/comparison.json`、人間向け要約は `app/perf/artifacts/summary.md` へ生成し、gitignore対象とする。JSONは概ね次の構造を持つ。
 
 ```ts
 type PerformanceResult = {
@@ -126,8 +126,8 @@ type PerformanceResult = {
   fixtureVersion: string;
   measuredAt: string;
   source: { commit: string; appVersion: string; dirty: boolean };
-  environment: Record<string, string | number>;
-  build: BuildMetrics;
+  environment: { id: string } & Record<string, string | number>;
+  build: { type: string } & BuildMetrics;
   timings: ScenarioMetrics[];
   memory: MemoryMetrics[];
 };

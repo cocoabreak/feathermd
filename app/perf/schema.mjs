@@ -1,6 +1,6 @@
 import path from "node:path";
 
-export const PERFORMANCE_SCHEMA_VERSION = 2;
+export const PERFORMANCE_SCHEMA_VERSION = 3;
 export const FIXTURE_VERSION = "plain-v1+rich-v1";
 
 const ABSOLUTE_PATH = /(?:^|[\s("'=])(?:[a-zA-Z]:[\\/]|\\\\|\/(?!\/))/;
@@ -82,6 +82,14 @@ function assertScenarioMetric(value, label, kind) {
   }
 }
 
+function assertUniqueScenarios(entries, label) {
+  const scenarios = new Set();
+  entries.forEach((entry) => {
+    assert(!scenarios.has(entry.scenario), `${label} contains a duplicate scenario`);
+    scenarios.add(entry.scenario);
+  });
+}
+
 export function validatePerformanceResult(result) {
   assert(result && typeof result === "object", "result must be an object");
   assert(
@@ -100,7 +108,7 @@ export function validatePerformanceResult(result) {
   assertString(result.source.appVersion, "source.appVersion");
   assert(typeof result.source.dirty === "boolean", "source.dirty must be boolean");
   assert(result.environment && typeof result.environment === "object", "environment is required");
-  for (const key of ["os", "architecture", "node", "measurement"]) {
+  for (const key of ["id", "os", "architecture", "node", "measurement"]) {
     assertString(result.environment[key], `environment.${key}`);
   }
   for (const [key, value] of Object.entries(result.environment)) {
@@ -111,6 +119,7 @@ export function validatePerformanceResult(result) {
     );
   }
   assert(result.build && typeof result.build === "object", "build is required");
+  assertString(result.build.type, "build.type");
   assertSizeSummary(result.build.total, "build.total");
   assertSizeSummary(result.build.initial, "build.initial");
   assertSizeSummary(result.build.lazy, "build.lazy");
@@ -155,6 +164,8 @@ export function validatePerformanceResult(result) {
   result.memory.forEach((value, index) =>
     assertScenarioMetric(value, `memory[${index}]`, "memory")
   );
+  assertUniqueScenarios(result.timings, "timings");
+  assertUniqueScenarios(result.memory, "memory");
   return result;
 }
 

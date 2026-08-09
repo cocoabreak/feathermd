@@ -1,23 +1,12 @@
 import { brotliCompressSync, constants as zlibConstants } from "node:zlib";
 import { execFileSync } from "node:child_process";
-import {
-  existsSync,
-  lstatSync,
-  mkdirSync,
-  readFileSync,
-  readdirSync,
-  writeFileSync,
-} from "node:fs";
+import { existsSync, lstatSync, readFileSync, readdirSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import packageJson from "../package.json" with { type: "json" };
-import {
-  FIXTURE_VERSION,
-  PERFORMANCE_SCHEMA_VERSION,
-  assertPublicResultSafe,
-  validatePerformanceResult,
-} from "./schema.mjs";
+import { performanceMarkdown, writePerformanceArtifacts } from "./report.mjs";
+import { FIXTURE_VERSION, PERFORMANCE_SCHEMA_VERSION } from "./schema.mjs";
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 export const PERF_MANIFEST_PATH = ".vite/perf-manifest.json";
@@ -307,70 +296,29 @@ export function createBuildPerformanceResult(build) {
       dirty: gitValue(["status", "--porcelain"], "unknown") !== "",
     },
     environment: {
+      id: `${os.platform()}-${os.arch()}-frontend-size`,
       os: `${os.platform()} ${os.release()}`,
       architecture: os.arch(),
       node: process.version,
       measurement: "build-size",
     },
-    build,
+    build: { ...build, type: "production-frontend" },
     timings: [],
     memory: [],
   };
 }
 
-function formatBytes(value) {
-  return `${value.toLocaleString("en-US")} B`;
-}
-
 export function buildMetricsMarkdown(result) {
-  const rows = [
-    ["All output", result.build.total],
-    ["Initial JS/CSS graph", result.build.initial],
-    ["Lazy manifest graph", result.build.lazy],
-  ];
-  return [
-    "# Windows frontend size report",
-    "",
-    `- Commit: \`${result.source.commit}\``,
-    `- App version: \`${result.source.appVersion}\``,
-    `- Schema: \`${result.schemaVersion}\``,
-    `- Fixture: \`${result.fixtureVersion}\``,
-    "- Mode: report only (no CI threshold)",
-    "",
-    "| Scope | Files | Raw | Brotli |",
-    "| --- | ---: | ---: | ---: |",
-    ...rows.map(
-      ([label, value]) =>
-        `| ${label} | ${value.fileCount} | ${formatBytes(value.rawBytes)} | ${formatBytes(value.brotliBytes)} |`
-    ),
-    "",
-    "## Feature groups",
-    "",
-    "| Feature | Files | Raw | Brotli |",
-    "| --- | ---: | ---: | ---: |",
-    ...Object.entries(result.build.featureGroups).map(
-      ([feature, value]) =>
-        `| ${feature} | ${value.fileCount} | ${formatBytes(value.rawBytes)} | ${formatBytes(value.brotliBytes)} |`
-    ),
-    "",
-    "## Largest files",
-    "",
-    "| File | Type | Raw | Brotli |",
-    "| --- | --- | ---: | ---: |",
-    ...result.build.largestFiles.map(
-      (file) =>
-        `| \`${file.file}\` | ${file.type} | ${formatBytes(file.rawBytes)} | ${formatBytes(file.brotliBytes)} |`
-    ),
-    "",
-  ].join("\n");
+  return performanceMarkdown(result);
 }
 
-export function writeBuildMetricsArtifacts({ buildDir, artifactsDir, distributionPaths = {} }) {
+export function writeBuildMetricsArtifacts({
+  buildDir,
+  artifactsDir,
+  distributionPaths = {},
+  baseline,
+}) {
   const result = createBuildPerformanceResult(collectBuildMetrics({ buildDir, distributionPaths }));
-  validatePerformanceResult(result);
-  assertPublicResultSafe(result);
-  mkdirSync(artifactsDir, { recursive: true });
-  writeFileSync(path.join(artifactsDir, "result.json"), `${JSON.stringify(result, null, 2)}\n`);
-  writeFileSync(path.join(artifactsDir, "summary.md"), buildMetricsMarkdown(result));
+  writePerformanceArtifacts({ result, baseline, artifactsDir });
   return result;
 }
