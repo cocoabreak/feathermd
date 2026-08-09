@@ -8,6 +8,7 @@ import {
   assertProductionOutputClean,
   buildMetricsMarkdown,
   collectBuildMetrics,
+  createBuildPerformanceResult,
 } from "./build-metrics.mjs";
 
 function createBuild(manifest) {
@@ -63,15 +64,7 @@ test("classifies initial, lazy, feature, type, and distribution sizes", (context
   assert.equal(metrics.distributions.msi.status, "not-measured");
   assert.ok(metrics.total.rawBytes > metrics.initial.rawBytes);
   assert.ok(metrics.byType.javascript.rawBytes > 0);
-  assert.match(
-    buildMetricsMarkdown({
-      source: { commit: "abc", appVersion: "1.0.0" },
-      schemaVersion: 1,
-      fixtureVersion: "fixture",
-      build: metrics,
-    }),
-    /Mode: report only/
-  );
+  assert.match(buildMetricsMarkdown(createBuildPerformanceResult(metrics)), /Mode: report only/);
 });
 
 test("uses final HTML references instead of every manifest entry for the initial graph", (context) => {

@@ -15,12 +15,14 @@ function validResult() {
     measuredAt: "2026-08-01T00:00:00.000Z",
     source: { commit: "abc123", appVersion: "1.0.0", dirty: false },
     environment: {
+      id: "windows-x64-test",
       os: "win32 test",
       architecture: "x64",
       node: "v24.0.0",
       measurement: "build-size",
     },
     build: {
+      type: "production-frontend",
       total: size,
       initial: size,
       lazy: { fileCount: 0, rawBytes: 0, brotliBytes: 0 },
@@ -54,6 +56,12 @@ test("rejects unsupported schemas and partial sizes", () => {
   const partial = validResult();
   delete partial.build.total.brotliBytes;
   assert.throws(() => validatePerformanceResult(partial), /brotliBytes/);
+  const missingEnvironmentId = validResult();
+  delete missingEnvironmentId.environment.id;
+  assert.throws(() => validatePerformanceResult(missingEnvironmentId), /environment.id/);
+  const missingBuildType = validResult();
+  delete missingBuildType.build.type;
+  assert.throws(() => validatePerformanceResult(missingBuildType), /build.type/);
 });
 
 test("rejects local paths and runtime identifiers", () => {
@@ -128,6 +136,22 @@ test("rejects partial or inconsistent memory snapshots", () => {
     ],
   };
   assert.throws(() => validatePerformanceResult(result), /workingSetBytes total/);
+});
+
+test("rejects duplicate timing and memory scenarios", () => {
+  const timingResult = validResult();
+  timingResult.timings = [
+    { scenario: "startup", status: "failed", error: "failed" },
+    { scenario: "startup", status: "not-measured", reason: "missing" },
+  ];
+  assert.throws(() => validatePerformanceResult(timingResult), /duplicate scenario/);
+
+  const memoryResult = validResult();
+  memoryResult.memory = [
+    { scenario: "plain", status: "failed", error: "failed" },
+    { scenario: "plain", status: "not-measured", reason: "missing" },
+  ];
+  assert.throws(() => validatePerformanceResult(memoryResult), /duplicate scenario/);
 });
 
 test("accepts sanitized public results", () => {
