@@ -147,6 +147,23 @@ GitHub Actionsの既存 `windows-desktop-build` は、通常build、SvelteKit内
 - 全Vite出力の合計
 - 単一主要chunkまたは機能グループの異常増加
 
+### 導入時の自然変動確認（2026-08-09）
+
+同一のWindows x64環境、Node.js v24.18.0、commit `55569d73f82fc352ee0e773f6fe1ea65d383defb`、schema 3、fixture `plain-v1+rich-v1`で `npm run perf:ci` を連続3回実行した。各実行はclean worktreeから行い、結果の環境IDは `win32-x64-frontend-size`、ビルド種別は `production-frontend` で一致した。
+
+| 指標 | 1回目 | 2回目 | 3回目 | 最大差 |
+| --- | ---: | ---: | ---: | ---: |
+| 総出力 raw | 8,734,210 B | 8,734,205 B | 8,734,210 B | 5 B |
+| 総出力 Brotli | 2,379,645 B | 2,379,649 B | 2,379,627 B | 22 B |
+| 初期ロード raw | 200,914 B | 200,910 B | 200,914 B | 4 B |
+| 初期ロード Brotli | 59,012 B | 59,019 B | 59,003 B | 16 B |
+| 遅延ロード raw | 8,511,946 B | 8,511,946 B | 8,511,946 B | 0 B |
+| 遅延ロード Brotli | 2,303,996 B | 2,303,994 B | 2,303,993 B | 3 B |
+
+KaTeX、Mermaid、Shikiのrawグループ合計は3回とも一致した。観測した最大相対差は初期ロードBrotliの約0.027%であり、導入時のサイズ計測は十分安定している。これは自然変動の確認記録であり、CI上限値は初回ベースライン確定後の別変更で設定する。
+
+Windows実機でのrelease計測と結果確認は `docs/releases/windows-performance-qa.md` に従う。
+
 比較対象が存在しない、manifestを解析できない、分類不能なentryがある場合は計測を失敗させ、0 byteや前回値で成功扱いしない。小さな増減を毎回CI失敗にせず、明確な回帰だけを検出する絶対上限または許容率をベースライン確定後に定める。
 
 ## 9. エラー処理と後始末
