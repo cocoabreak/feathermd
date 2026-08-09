@@ -60,10 +60,10 @@
 - [x] サイズのJSONとMarkdownをGitHub Actions artifactへ保存する
 - [x] 解析出力を破棄して通常production buildを再実行し、perf manifest不在を確認してからTauriをビルドする
 - [x] 導入時はレポートのみとする
-- [ ] 複数回の結果から自然変動を確認する
+- [x] 複数回の結果から自然変動を確認する
 - [ ] ベースライン確定後、初期ロードと総Vite出力の大幅回帰上限を別変更で設定する
 - [x] 時間・メモリをhosted runnerのCIゲートへ含めない
-- [ ] Windows実機のリリースQA手順へrelease計測コマンドと結果確認を追加する
+- [x] Windows実機のリリースQA手順へrelease計測コマンドと結果確認を追加する
 
 ## T-007: 初回ベースラインと軽量化候補
 
