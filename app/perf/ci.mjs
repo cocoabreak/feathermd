@@ -8,10 +8,17 @@ import {
   writeBuildMetricsArtifacts,
 } from "./build-metrics.mjs";
 import { validatePerformanceFixtures } from "./fixtures.mjs";
+import {
+  assertSizeBudgetPassed,
+  evaluateSizeBudget,
+  loadSizeBudget,
+  writeSizeBudgetArtifacts,
+} from "./size-budget.mjs";
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const buildDir = path.join(appDir, "build");
 const artifactsDir = path.join(appDir, "perf", "artifacts");
+const sizeBudgetPath = path.join(appDir, "perf", "size-budget.json");
 const manifestPath = path.join(buildDir, ...PERF_MANIFEST_PATH.split("/"));
 const svelteKitManifestPath = path.join(
   appDir,
@@ -42,7 +49,14 @@ try {
   if (!existsSync(svelteKitManifestPath)) throw new Error("SvelteKit client manifest is missing");
   mkdirSync(path.dirname(manifestPath), { recursive: true });
   copyFileSync(svelteKitManifestPath, manifestPath);
-  writeBuildMetricsArtifacts({ buildDir, artifactsDir });
+  const result = writeBuildMetricsArtifacts({
+    buildDir,
+    artifactsDir,
+    reportMode: "ci-threshold",
+  });
+  const assessment = evaluateSizeBudget(result.build, loadSizeBudget(sizeBudgetPath));
+  writeSizeBudgetArtifacts({ assessment, artifactsDir });
+  assertSizeBudgetPassed(assessment);
 } catch (error) {
   analysisError = error;
 } finally {

@@ -168,7 +168,7 @@ jobs:
         working-directory: app
         run: npm run perf:test
 
-      - name: Measure frontend size and rebuild production output
+      - name: Measure frontend size, enforce budget, and rebuild production output
         working-directory: app
         run: npm run perf:ci
 

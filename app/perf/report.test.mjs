@@ -81,6 +81,17 @@ function result() {
   };
 }
 
+test("labels CI threshold reports only when explicitly requested", () => {
+  const reportOnly = performanceMarkdown(result());
+  const enforced = performanceMarkdown(result(), undefined, { reportMode: "ci-threshold" });
+  assert.match(reportOnly, /Mode: report only/);
+  assert.match(enforced, /Mode: CI size threshold enforced/);
+  assert.throws(
+    () => performanceMarkdown(result(), undefined, { reportMode: "unknown" }),
+    /unsupported performance report mode/
+  );
+});
+
 test("compares size, timing, and memory values with deltas", () => {
   const baseline = result();
   const current = structuredClone(baseline);

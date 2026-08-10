@@ -213,7 +213,10 @@ function incompleteMeasurements(result) {
   return [...result.timings, ...result.memory].filter((entry) => entry.status !== "measured");
 }
 
-export function performanceMarkdown(result, baseline) {
+export function performanceMarkdown(result, baseline, { reportMode = "report-only" } = {}) {
+  if (!["report-only", "ci-threshold"].includes(reportMode)) {
+    throw new Error(`unsupported performance report mode: ${reportMode}`);
+  }
   const comparison = comparePerformanceResults(result, baseline);
   const lines = [
     "# Windows performance report",
@@ -224,7 +227,9 @@ export function performanceMarkdown(result, baseline) {
     `- Fixture: ${inlineCode(result.fixtureVersion)}`,
     `- Environment: ${inlineCode(result.environment.id)}`,
     `- Build type: ${inlineCode(result.build.type)}`,
-    "- Mode: report only (no CI threshold)",
+    reportMode === "ci-threshold"
+      ? "- Mode: CI size threshold enforced (see size-budget.md)"
+      : "- Mode: report only (no CI threshold)",
     "",
     "## Build sizes",
     "",
@@ -307,9 +312,9 @@ export function performanceMarkdown(result, baseline) {
   return lines.join("\n");
 }
 
-export function writePerformanceArtifacts({ result, baseline, artifactsDir }) {
+export function writePerformanceArtifacts({ result, baseline, artifactsDir, reportMode }) {
   const comparison = comparePerformanceResults(result, baseline);
-  const markdown = performanceMarkdown(result, baseline);
+  const markdown = performanceMarkdown(result, baseline, { reportMode });
   mkdirSync(artifactsDir, { recursive: true });
   writeFileSync(path.join(artifactsDir, "result.json"), `${JSON.stringify(result, null, 2)}\n`);
   writeFileSync(
