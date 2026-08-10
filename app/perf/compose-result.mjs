@@ -8,6 +8,11 @@ import { writePerformanceArtifacts } from "./report.mjs";
 const DISTRIBUTION_KINDS = new Set(["executable", "msi", "nsis", "portableZip"]);
 const TIMING_SCENARIOS = [
   "startup-cold",
+  "startup-cold-process",
+  "startup-cold-cdp-listener",
+  "startup-cold-cdp-target",
+  "startup-cold-document",
+  "startup-cold-interactive",
   "ready-to-fixture-request-plain",
   "first-render-plain",
   "repeat-render-plain",
@@ -15,6 +20,11 @@ const TIMING_SCENARIOS = [
   "first-render-rich",
   "repeat-render-rich",
   "startup-warm",
+  "startup-warm-process",
+  "startup-warm-cdp-listener",
+  "startup-warm-cdp-target",
+  "startup-warm-document",
+  "startup-warm-interactive",
 ];
 const MEMORY_SCENARIOS = ["empty", "plain", "rich"];
 

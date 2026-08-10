@@ -179,6 +179,31 @@ function elapsedMs(start, end) {
   return Number(value.toFixed(3));
 }
 
+export function calculateStartupTimings(milestones) {
+  const ordered = [
+    ["startupRequestedAt", milestones?.startupRequestedAt],
+    ["processReadyAt", milestones?.processReadyAt],
+    ["cdpListenerReadyAt", milestones?.cdpListenerReadyAt],
+    ["cdpTargetReadyAt", milestones?.cdpTargetReadyAt],
+    ["documentReadyAt", milestones?.documentReadyAt],
+    ["startupReadyAt", milestones?.startupReadyAt],
+  ];
+  for (const [label, value] of ordered) {
+    assert.ok(Number.isFinite(value), `${label} must be finite`);
+  }
+  for (let index = 1; index < ordered.length; index += 1) {
+    assert.ok(ordered[index][1] >= ordered[index - 1][1], "startup milestones are out of order");
+  }
+  return {
+    startupMs: elapsedMs(ordered[0][1], ordered[5][1]),
+    startupProcessMs: elapsedMs(ordered[0][1], ordered[1][1]),
+    startupCdpListenerMs: elapsedMs(ordered[1][1], ordered[2][1]),
+    startupCdpTargetMs: elapsedMs(ordered[2][1], ordered[3][1]),
+    startupDocumentMs: elapsedMs(ordered[3][1], ordered[4][1]),
+    startupInteractiveMs: elapsedMs(ordered[4][1], ordered[5][1]),
+  };
+}
+
 async function waitForNewActiveTab(driver, previousTabId, expectedTitle) {
   await driver.waitFor(
     `(() => {
@@ -262,6 +287,7 @@ export async function launchReadyPerformanceApp(workspace) {
     );
     const assertBackgroundCondition = createFeatherMdBackgroundGuard(appIdentity);
     assertBackgroundCondition();
+    const processReadyAt = performance.now();
 
     const driver = new WebView2Driver({ port: workspace.port });
     await driver.waitForCdp(90_000);
@@ -274,12 +300,14 @@ export async function launchReadyPerformanceApp(workspace) {
       profileDir: workspace.profileDir,
       port: workspace.port,
     });
+    const cdpListenerReadyAt = performance.now();
 
     const targets = (await driver.targets()).filter((candidate) =>
       isProductionTauriUrl(candidate.url ?? "")
     );
     assert.equal(targets.length, 1, "performance CDP target is ambiguous");
     const productionDriver = new WebView2Driver({ port: workspace.port, devUrl: targets[0].url });
+    const cdpTargetReadyAt = performance.now();
     await productionDriver.waitFor('document.readyState === "complete" && document.body !== null', {
       timeoutMs: 30_000,
     });
@@ -293,12 +321,21 @@ export async function launchReadyPerformanceApp(workspace) {
     assert.equal(page.productionHookAbsent, true);
     assert.ok(page.bodyChildren > 0);
     assert.equal(isProductionTauriUrl(page.origin), true);
+    const documentReadyAt = performance.now();
     await productionDriver.key("Ctrl+Shift+P");
     await productionDriver.waitFor(
       'document.querySelector(\'[role="dialog"] [role="listbox"]\') !== null',
       { timeoutMs: 10_000 }
     );
     const startupReadyAt = performance.now();
+    const startupTimings = calculateStartupTimings({
+      startupRequestedAt,
+      processReadyAt,
+      cdpListenerReadyAt,
+      cdpTargetReadyAt,
+      documentReadyAt,
+      startupReadyAt,
+    });
     assert.equal(await productionDriver.click(".picker-backdrop"), "OK");
     await productionDriver.waitFor("document.querySelector('[role=\"dialog\"]') === null", {
       timeoutMs: 10_000,
@@ -314,7 +351,7 @@ export async function launchReadyPerformanceApp(workspace) {
       appIdentity,
       listenerProcess,
       assertBackgroundCondition,
-      startupRequestedAt,
+      startupTimings,
       startupReadyAt,
       initialTabId,
     };
@@ -407,7 +444,7 @@ export async function measurePerformanceWorkspaceStartup(
   try {
     const launch = await launchReady(workspace);
     job = launch.job;
-    result = { startupMs: elapsedMs(launch.startupRequestedAt, launch.startupReadyAt) };
+    result = structuredClone(launch.startupTimings);
   } catch (error) {
     if (error?.performanceWorkspaceCleanupSafe === false) {
       cleanupSafe = false;
@@ -444,7 +481,7 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
     const {
       productionDriver,
       assertBackgroundCondition,
-      startupRequestedAt,
+      startupTimings,
       startupReadyAt,
       initialTabId,
     } = launch;
@@ -501,7 +538,12 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
       isolatedProfileCreated: true,
       normalStoresUnchanged: true,
       timings: {
-        startupColdMs: elapsedMs(startupRequestedAt, startupReadyAt),
+        startupColdMs: startupTimings.startupMs,
+        startupProcessMs: startupTimings.startupProcessMs,
+        startupCdpListenerMs: startupTimings.startupCdpListenerMs,
+        startupCdpTargetMs: startupTimings.startupCdpTargetMs,
+        startupDocumentMs: startupTimings.startupDocumentMs,
+        startupInteractiveMs: startupTimings.startupInteractiveMs,
         readyToFixtureRequestMs: elapsedMs(startupReadyAt, firstRequestedAt),
         firstRenderMs: elapsedMs(firstRequestedAt, firstRenderedAt),
         repeatRenderMs: elapsedMs(repeatRequestedAt, repeatRenderedAt),

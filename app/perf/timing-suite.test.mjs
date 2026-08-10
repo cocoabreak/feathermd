@@ -7,6 +7,16 @@ import {
   summarizeTimingTrials,
 } from "./timing-suite.mjs";
 
+function startupPhaseTimings(value = 1) {
+  return {
+    startupProcessMs: value,
+    startupCdpListenerMs: value + 1,
+    startupCdpTargetMs: value + 2,
+    startupDocumentMs: value + 3,
+    startupInteractiveMs: value + 4,
+  };
+}
+
 test("summarizes exact trial values without changing their order", () => {
   assert.deepEqual(
     summarizeTimingTrials("startup-cold", [12, 9, 11, 10, 30], { expectedTrials: 5 }),
@@ -39,6 +49,7 @@ test("runs isolated fixture trials and maps their timing scenarios", async () =>
         repeatFixtureRendered: true,
         timings: {
           startupColdMs: 100 + calls,
+          ...startupPhaseTimings(calls),
           readyToFixtureRequestMs: calls,
           firstRenderMs: 10 + calls,
           repeatRenderMs: 20 + calls,
@@ -51,6 +62,11 @@ test("runs isolated fixture trials and maps their timing scenarios", async () =>
     suite.timings.map(({ scenario, trials }) => ({ scenario, trials })),
     [
       { scenario: "startup-cold", trials: [101, 102] },
+      { scenario: "startup-cold-process", trials: [1, 2] },
+      { scenario: "startup-cold-cdp-listener", trials: [2, 3] },
+      { scenario: "startup-cold-cdp-target", trials: [3, 4] },
+      { scenario: "startup-cold-document", trials: [4, 5] },
+      { scenario: "startup-cold-interactive", trials: [5, 6] },
       { scenario: "ready-to-fixture-request-plain", trials: [1, 2] },
       { scenario: "first-render-plain", trials: [11, 12] },
       { scenario: "repeat-render-plain", trials: [21, 22] },
@@ -71,6 +87,7 @@ test("records failed trials, runs every safe trial, and never summarizes a parti
         repeatFixtureRendered: true,
         timings: {
           startupColdMs: 100,
+          ...startupPhaseTimings(),
           readyToFixtureRequestMs: 1,
           firstRenderMs: 2,
           repeatRenderMs: 3,
@@ -115,6 +132,7 @@ test("waits for the current trial cleanup boundary before honoring interruption"
         repeatFixtureRendered: true,
         timings: {
           startupColdMs: 100,
+          ...startupPhaseTimings(),
           readyToFixtureRequestMs: 1,
           firstRenderMs: 2,
           repeatRenderMs: 3,
@@ -157,6 +175,7 @@ test("keeps plain and rich in separate suites", async () => {
         repeatFixtureRendered: true,
         timings: {
           startupColdMs: 100,
+          ...startupPhaseTimings(),
           readyToFixtureRequestMs: 1,
           firstRenderMs: 2,
           repeatRenderMs: 3,
@@ -170,6 +189,11 @@ test("keeps plain and rich in separate suites", async () => {
     result.timings.map((timing) => timing.scenario),
     [
       "startup-cold",
+      "startup-cold-process",
+      "startup-cold-cdp-listener",
+      "startup-cold-cdp-target",
+      "startup-cold-document",
+      "startup-cold-interactive",
       "ready-to-fixture-request-plain",
       "first-render-plain",
       "repeat-render-plain",
@@ -205,7 +229,10 @@ test("primes once and measures five launches in one reusable warm workspace", as
     },
     measureStartup: async (actualWorkspace) => {
       seenWorkspaces.push(actualWorkspace);
-      return { startupMs: 100 + seenWorkspaces.length };
+      return {
+        startupMs: 100 + seenWorkspaces.length,
+        ...startupPhaseTimings(seenWorkspaces.length),
+      };
     },
     cleanupWorkspace: (actualWorkspace) => {
       assert.equal(actualWorkspace, workspace);
@@ -219,6 +246,17 @@ test("primes once and measures five launches in one reusable warm workspace", as
   assert.equal(cleanupCalls, 1);
   assert.equal(leaseReleaseCalls, 1);
   assert.deepEqual(suite.timings[0].trials, [102, 103, 104, 105, 106]);
+  assert.deepEqual(
+    suite.timings.map((timing) => timing.scenario),
+    [
+      "startup-warm",
+      "startup-warm-process",
+      "startup-warm-cdp-listener",
+      "startup-warm-cdp-target",
+      "startup-warm-document",
+      "startup-warm-interactive",
+    ]
+  );
 });
 
 test("does not report warm timing when priming fails", async () => {
