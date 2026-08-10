@@ -30,6 +30,7 @@
     "perf:verify-app": "node perf/measure.mjs",
     "perf:verify-timings": "node perf/timing-suite.mjs",
     "perf:verify-memory": "node perf/memory-suite.mjs",
+    "perf:compose": "node perf/compose-result.mjs",
     "perf:report": "node perf/report.mjs",
     "perf:ci": "node perf/ci.mjs",
     "e2e:smoke": "node e2e/smoke.mjs",

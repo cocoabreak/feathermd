@@ -26,13 +26,13 @@ Confirm:
 - `build/.vite/perf-manifest.json` is absent after the final production rebuild.
 - Missing distributions remain `not-measured`; they are never interpreted as zero bytes.
 
-To compare the saved result with a reviewed baseline, replace `baseline-name.json` with the selected baseline file:
+The first reviewed release baseline is `perf/baselines/windows-x64-i9-9900k-64gb-sata-2026-08.json`. A frontend-only `perf:ci` result has a different environment ID and build type, so do not compare it directly with a full release-QA baseline.
+
+Build the normal release distributions before the isolated performance suites. Create the portable ZIP with the same file set as `.github/workflows/release.yml`.
 
 ```powershell
-npm run --silent perf:report -- perf/artifacts/result.json perf/baselines/baseline-name.json perf/artifacts
+npm run tauri -- build
 ```
-
-The comparison is valid only when schema version, fixture version, environment ID, and build type match. Review current value, baseline value, absolute delta, and percentage delta in both `comparison.json` and `summary.md`.
 
 ## Isolated release timing and memory
 
@@ -48,6 +48,30 @@ npm run --silent perf:verify-memory | Tee-Object -FilePath perf/artifacts/memory
 if ($LASTEXITCODE -ne 0) { throw "performance memory suite failed" }
 ```
 
+Create `perf/artifacts/environment.json` with an `environment` object containing the selected reference environment's public fields and `buildType` set to `windows-x64-release-qa`. Do not include local paths, user names, or computer names. Then compose the full result, replacing distribution file names with the current release artifacts:
+
+```powershell
+npm run --silent perf:compose -- `
+  perf/artifacts/result.json `
+  perf/artifacts/timings.json `
+  perf/artifacts/memory.json `
+  perf/artifacts/environment.json `
+  perf/artifacts/full `
+  executable=src-tauri/target/release/feathermd.exe `
+  msi=src-tauri/target/release/bundle/msi/FeatherMD_0.2.4_x64_en-US.msi `
+  nsis=src-tauri/target/release/bundle/nsis/FeatherMD_0.2.4_x64-setup.exe `
+  portableZip=perf/artifacts/FeatherMD_0.2.4_x64-portable.zip
+```
+
+To compare the composed result with the selected reviewed baseline:
+
+```powershell
+npm run --silent perf:report -- `
+  perf/artifacts/full/result.json `
+  perf/baselines/windows-x64-i9-9900k-64gb-sata-2026-08.json `
+  perf/artifacts/comparison
+```
+
 Confirm:
 
 - Timing output contains five successful trials for cold startup, warm startup, plain first/repeat render, and rich first/repeat render, with individual values and medians.
@@ -55,6 +79,7 @@ Confirm:
 - No timing or memory entry is `failed` or `not-measured`. Keep the failure reason when a suite fails; do not substitute a previous or zero value.
 - The normal FeatherMD stores and trusted roots remain unchanged.
 - Compare timing and memory only with a reviewed baseline from the same reference environment. Hosted-runner timing and memory are not release gates.
+- `perf:compose` must fail for a dirty build result, incomplete suite, invalid schema, unsafe public value, or unreadable distribution. Do not edit a failed result into a measured result.
 
 ## Release record
 
