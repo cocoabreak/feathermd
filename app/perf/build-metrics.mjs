@@ -317,8 +317,9 @@ export function writeBuildMetricsArtifacts({
   artifactsDir,
   distributionPaths = {},
   baseline,
+  reportMode,
 }) {
   const result = createBuildPerformanceResult(collectBuildMetrics({ buildDir, distributionPaths }));
-  writePerformanceArtifacts({ result, baseline, artifactsDir });
+  writePerformanceArtifacts({ result, baseline, artifactsDir, reportMode });
   return result;
 }
