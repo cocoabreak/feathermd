@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   assertNoForeignFeatherMdProcesses,
+  calculateStartupTimings,
   createFeatherMdBackgroundGuard,
   finishPerformanceLaunch,
   isProductionTauriUrl,
@@ -9,6 +10,32 @@ import {
   measurePerformanceWorkspaceStartup,
   seedPerformanceStores,
 } from "./measure.mjs";
+
+test("calculates ordered startup phases and rejects missing or reversed milestones", () => {
+  const milestones = {
+    startupRequestedAt: 10,
+    processReadyAt: 11.25,
+    cdpListenerReadyAt: 20,
+    cdpTargetReadyAt: 20.5,
+    documentReadyAt: 24,
+    startupReadyAt: 25.125,
+  };
+  assert.deepEqual(calculateStartupTimings(milestones), {
+    startupMs: 15.125,
+    startupProcessMs: 1.25,
+    startupCdpListenerMs: 8.75,
+    startupCdpTargetMs: 0.5,
+    startupDocumentMs: 3.5,
+    startupInteractiveMs: 1.125,
+  });
+  assert.throws(
+    () => calculateStartupTimings({ ...milestones, cdpTargetReadyAt: 19 }),
+    /out of order/
+  );
+  const missing = { ...milestones };
+  delete missing.documentReadyAt;
+  assert.throws(() => calculateStartupTimings(missing), /documentReadyAt must be finite/);
+});
 
 test("rejects a normal app race without exposing any process termination operation", () => {
   const owned = {
@@ -153,7 +180,17 @@ test("measures and closes one ready launch without cleaning its reusable workspa
   const result = await measurePerformanceWorkspaceStartup(workspace, {
     launchReady: async (actualWorkspace) => {
       assert.equal(actualWorkspace, workspace);
-      return { job, startupRequestedAt: 10, startupReadyAt: 25.125 };
+      return {
+        job,
+        startupTimings: {
+          startupMs: 15.125,
+          startupProcessMs: 1.25,
+          startupCdpListenerMs: 8.75,
+          startupCdpTargetMs: 0.5,
+          startupDocumentMs: 3.5,
+          startupInteractiveMs: 1.125,
+        },
+      };
     },
     finish: async (leases, actualJob, actualWorkspace, cleanupSafe) => {
       assert.deepEqual(leases, []);
@@ -165,7 +202,14 @@ test("measures and closes one ready launch without cleaning its reusable workspa
     },
   });
   assert.equal(finished, true);
-  assert.deepEqual(result, { startupMs: 15.125 });
+  assert.deepEqual(result, {
+    startupMs: 15.125,
+    startupProcessMs: 1.25,
+    startupCdpListenerMs: 8.75,
+    startupCdpTargetMs: 0.5,
+    startupDocumentMs: 3.5,
+    startupInteractiveMs: 1.125,
+  });
 });
 
 test("marks an unconfirmed reusable Job shutdown unsafe for workspace cleanup", async () => {
@@ -179,7 +223,7 @@ test("marks an unconfirmed reusable Job shutdown unsafe for workspace cleanup", 
     measurePerformanceWorkspaceStartup(
       {},
       {
-        launchReady: async () => ({ job, startupRequestedAt: 10, startupReadyAt: 20 }),
+        launchReady: async () => ({ job, startupTimings: { startupMs: 10 } }),
       }
     ),
     (error) =>

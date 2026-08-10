@@ -27,6 +27,21 @@ const FIXTURE_SCENARIOS = {
   ],
 };
 
+const STARTUP_PHASE_FIELDS = [
+  ["process", "startupProcessMs"],
+  ["cdp-listener", "startupCdpListenerMs"],
+  ["cdp-target", "startupCdpTargetMs"],
+  ["document", "startupDocumentMs"],
+  ["interactive", "startupInteractiveMs"],
+];
+
+function startupScenarioMappings(kind, totalField) {
+  return [
+    [`startup-${kind}`, totalField],
+    ...STARTUP_PHASE_FIELDS.map(([phase, field]) => [`startup-${kind}-${phase}`, field]),
+  ];
+}
+
 function assertTrialCount(value) {
   assert.ok(Number.isInteger(value) && value > 0, "timing trial count must be positive");
 }
@@ -57,7 +72,9 @@ export function summarizeTimingTrials(scenario, trials, { expectedTrials } = {})
 function scenarioMappings(fixtureId, includeColdStartup) {
   const scenarios = FIXTURE_SCENARIOS[fixtureId];
   assert.ok(scenarios, `unsupported timing fixture: ${fixtureId}`);
-  return includeColdStartup ? [["startup-cold", "startupColdMs"], ...scenarios] : scenarios;
+  return includeColdStartup
+    ? [...startupScenarioMappings("cold", "startupColdMs"), ...scenarios]
+    : scenarios;
 }
 
 function assertTrialResult(result, fixtureId, trialNumber) {
@@ -178,8 +195,9 @@ export async function runWarmStartupSuite({
   signal,
 } = {}) {
   assertTrialCount(trialCount);
+  const mappings = startupScenarioMappings("warm", "startupMs");
   const trials = [];
-  const values = [];
+  const results = [];
   let workspace;
   let workspaceLease;
   let primed = false;
@@ -193,9 +211,7 @@ export async function runWarmStartupSuite({
       trials,
       interrupted: true,
       continuationSafe: true,
-      timings: [
-        { scenario: "startup-warm", status: "failed", error: `0/${trialCount} trials succeeded` },
-      ],
+      timings: failedTimings(mappings, 0, trialCount),
     };
   }
   try {
@@ -218,8 +234,10 @@ export async function runWarmStartupSuite({
       try {
         prepareLaunch({ port: workspace.port, runDir: workspace.runDir });
         const result = await measureStartup(workspace);
-        assertTimingValue(result?.startupMs, `startup-warm[${index}]`);
-        values.push(result.startupMs);
+        for (const [scenario, field] of mappings) {
+          assertTimingValue(result?.[field], `${scenario}[${index}]`);
+        }
+        results.push(result);
         trials.push({ trial: index + 1, status: "measured" });
       } catch (error) {
         workspaceCleanupSafe = error?.performanceWorkspaceCleanupSafe !== false;
@@ -255,7 +273,7 @@ export async function runWarmStartupSuite({
 
   const complete =
     primed &&
-    values.length === trialCount &&
+    results.length === trialCount &&
     trials.length === trialCount &&
     !signal?.aborted &&
     continuationSafe;
@@ -266,15 +284,15 @@ export async function runWarmStartupSuite({
     interrupted: signal?.aborted === true,
     continuationSafe,
     ...(setupFailure ? { setupFailure } : {}),
-    timings: [
-      complete
-        ? summarizeTimingTrials("startup-warm", values, { expectedTrials: trialCount })
-        : {
-            scenario: "startup-warm",
-            status: "failed",
-            error: `${values.length}/${trialCount} trials succeeded`,
-          },
-    ],
+    timings: complete
+      ? mappings.map(([scenario, field]) =>
+          summarizeTimingTrials(
+            scenario,
+            results.map((result) => result[field]),
+            { expectedTrials: trialCount }
+          )
+        )
+      : failedTimings(mappings, results.length, trialCount),
   };
 }
 
