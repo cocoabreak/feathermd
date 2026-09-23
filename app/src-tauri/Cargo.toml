@@ -29,8 +29,6 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 notify = "8"
 base64 = "0.22"
-# cookie 0.18.1 が time 0.3.52+ の Parsable::parse 変更と非互換なためピン留め
-time = ">=0.3.0, <0.3.52"
 ignore = "0.4.28"
 regex = "1.13.0"
 open = "5.4.0"
