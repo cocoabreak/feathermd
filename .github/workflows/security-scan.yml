@@ -50,6 +50,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          # 初回実行やラベル削除後でも通知できるよう、専用ラベルを作成・更新する。
+          gh label create security-scan --repo "${{ github.repository }}" \
+            --color D93F0B --description "Weekly dependency security scan" --force
+
           # 既に open のスキャン issue があれば新規作成せずコメント追記
           EXISTING=$(gh issue list --repo "${{ github.repository }}" \
             --label security-scan --state open --json number --jq '.[0].number // empty')
