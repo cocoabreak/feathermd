@@ -2,6 +2,22 @@
 
 All notable changes to FeatherMD are documented in this file.
 
+## [0.2.5] - 2026-09-23
+
+### Added
+
+- Added styled GitHub Alerts and Obsidian Callouts with custom titles, folding, nesting, and support for printing and HTML export.
+- Added Windows performance report comparisons, process-tree memory measurements, startup phase timings, and frontend size limits in CI.
+
+### Changed
+
+- Updated compatible frontend and Rust dependencies, including Shiki 4.4.3 and its expanded language grammars.
+- Removed the obsolete time upper-bound workaround after verifying cookie 0.18.2 with time 0.3.55. The direct base64 dependency remains at 0.22 after compatibility and performance evaluation.
+
+### Fixed
+
+- Fixed weekly security-scan issue notification failures and updated affected dependencies to address security findings.
+
 ## [0.2.4] - 2026-08-02
 
 ### Added

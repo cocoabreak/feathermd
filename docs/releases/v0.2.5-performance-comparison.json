@@ -1,0 +1,434 @@
+{
+  "status": "partial",
+  "reasons": [],
+  "metrics": {
+    "sizes": [
+      {
+        "id": "build.total.raw",
+        "label": "All output raw",
+        "unit": "bytes",
+        "current": 8918100,
+        "baseline": 8734210,
+        "delta": 183890,
+        "deltaPercent": 2.105399343501015
+      },
+      {
+        "id": "build.total.brotli",
+        "label": "All output Brotli",
+        "unit": "bytes",
+        "current": 2384271,
+        "baseline": 2379635,
+        "delta": 4636,
+        "deltaPercent": 0.19481979379190506
+      },
+      {
+        "id": "build.initial.raw",
+        "label": "Initial graph raw",
+        "unit": "bytes",
+        "current": 202371,
+        "baseline": 200914,
+        "delta": 1457,
+        "deltaPercent": 0.7251859004350121
+      },
+      {
+        "id": "build.initial.brotli",
+        "label": "Initial graph Brotli",
+        "unit": "bytes",
+        "current": 59468,
+        "baseline": 59014,
+        "delta": 454,
+        "deltaPercent": 0.7693089775307554
+      },
+      {
+        "id": "build.lazy.raw",
+        "label": "Lazy graph raw",
+        "unit": "bytes",
+        "current": 8694380,
+        "baseline": 8511946,
+        "delta": 182434,
+        "deltaPercent": 2.1432701758211343
+      },
+      {
+        "id": "build.lazy.brotli",
+        "label": "Lazy graph Brotli",
+        "unit": "bytes",
+        "current": 2308167,
+        "baseline": 2303996,
+        "delta": 4171,
+        "deltaPercent": 0.18103330040503543
+      },
+      {
+        "id": "build.byType.javascript.raw",
+        "label": "byType.javascript raw",
+        "unit": "bytes",
+        "current": 7754318,
+        "baseline": 7570581,
+        "delta": 183737,
+        "deltaPercent": 2.4269867794823146
+      },
+      {
+        "id": "build.byType.javascript.brotli",
+        "label": "byType.javascript Brotli",
+        "unit": "bytes",
+        "current": 1506848,
+        "baseline": 1502263,
+        "delta": 4585,
+        "deltaPercent": 0.30520621222781896
+      },
+      {
+        "id": "build.byType.css.raw",
+        "label": "byType.css raw",
+        "unit": "bytes",
+        "current": 69929,
+        "baseline": 69775,
+        "delta": 154,
+        "deltaPercent": 0.22070942314582587
+      },
+      {
+        "id": "build.byType.css.brotli",
+        "label": "byType.css Brotli",
+        "unit": "bytes",
+        "current": 14195,
+        "baseline": 14155,
+        "delta": 40,
+        "deltaPercent": 0.282585658777817
+      },
+      {
+        "id": "build.byType.image.raw",
+        "label": "byType.image raw",
+        "unit": "bytes",
+        "current": 19467,
+        "baseline": 19467,
+        "delta": 0,
+        "deltaPercent": 0
+      },
+      {
+        "id": "build.byType.image.brotli",
+        "label": "byType.image Brotli",
+        "unit": "bytes",
+        "current": 15925,
+        "baseline": 15925,
+        "delta": 0,
+        "deltaPercent": 0
+      },
+      {
+        "id": "build.byType.font.raw",
+        "label": "byType.font raw",
+        "unit": "bytes",
+        "current": 1072948,
+        "baseline": 1072948,
+        "delta": 0,
+        "deltaPercent": 0
+      },
+      {
+        "id": "build.byType.font.brotli",
+        "label": "byType.font Brotli",
+        "unit": "bytes",
+        "current": 846843,
+        "baseline": 846843,
+        "delta": 0,
+        "deltaPercent": 0
+      },
+      {
+        "id": "build.byType.other.raw",
+        "label": "byType.other raw",
+        "unit": "bytes",
+        "current": 1438,
+        "baseline": 1439,
+        "delta": -1,
+        "deltaPercent": -0.06949270326615706
+      },
+      {
+        "id": "build.byType.other.brotli",
+        "label": "byType.other Brotli",
+        "unit": "bytes",
+        "current": 460,
+        "baseline": 449,
+        "delta": 11,
+        "deltaPercent": 2.4498886414253898
+      },
+      {
+        "id": "build.featureGroups.katex.raw",
+        "label": "featureGroups.katex raw",
+        "unit": "bytes",
+        "current": 1909005,
+        "baseline": 1908215,
+        "delta": 790,
+        "deltaPercent": 0.04139994707095374
+      },
+      {
+        "id": "build.featureGroups.katex.brotli",
+        "label": "featureGroups.katex Brotli",
+        "unit": "bytes",
+        "current": 1055192,
+        "baseline": 1054897,
+        "delta": 295,
+        "deltaPercent": 0.027964815522273742
+      },
+      {
+        "id": "build.featureGroups.mermaid.raw",
+        "label": "featureGroups.mermaid raw",
+        "unit": "bytes",
+        "current": 3470443,
+        "baseline": 3450733,
+        "delta": 19710,
+        "deltaPercent": 0.5711829921352942
+      },
+      {
+        "id": "build.featureGroups.mermaid.brotli",
+        "label": "featureGroups.mermaid Brotli",
+        "unit": "bytes",
+        "current": 824329,
+        "baseline": 823514,
+        "delta": 815,
+        "deltaPercent": 0.09896613779486446
+      },
+      {
+        "id": "build.featureGroups.shiki.raw",
+        "label": "featureGroups.shiki raw",
+        "unit": "bytes",
+        "current": 2579904,
+        "baseline": 2393647,
+        "delta": 186257,
+        "deltaPercent": 7.781306099019614
+      },
+      {
+        "id": "build.featureGroups.shiki.brotli",
+        "label": "featureGroups.shiki Brotli",
+        "unit": "bytes",
+        "current": 233082,
+        "baseline": 230118,
+        "delta": 2964,
+        "deltaPercent": 1.2880348343024013
+      },
+      {
+        "id": "build.distributions.executable",
+        "label": "Distribution executable",
+        "unit": "bytes",
+        "current": 8582144,
+        "baseline": 8572416,
+        "delta": 9728,
+        "deltaPercent": 0.11348026040733442
+      },
+      {
+        "id": "build.distributions.msi",
+        "label": "Distribution msi",
+        "unit": "bytes",
+        "current": 5885952,
+        "baseline": 5881856,
+        "delta": 4096,
+        "deltaPercent": 0.06963788300835655
+      },
+      {
+        "id": "build.distributions.nsis",
+        "label": "Distribution nsis",
+        "unit": "bytes",
+        "current": 4751244,
+        "baseline": 4760917,
+        "delta": -9673,
+        "deltaPercent": -0.20317514462024855
+      },
+      {
+        "id": "build.distributions.portableZip",
+        "label": "Distribution portableZip",
+        "unit": "bytes",
+        "current": 5339078,
+        "baseline": 5340367,
+        "delta": -1289,
+        "deltaPercent": -0.024136917930921226
+      }
+    ],
+    "timings": [
+      {
+        "id": "timings.startup-cold",
+        "label": "startup-cold",
+        "unit": "ms",
+        "current": 3026.763,
+        "baseline": 2952.911,
+        "delta": 73.85199999999986,
+        "deltaPercent": 2.5009897013489355
+      },
+      {
+        "id": "timings.ready-to-fixture-request-plain",
+        "label": "ready-to-fixture-request-plain",
+        "unit": "ms",
+        "current": 769.506,
+        "baseline": 764.064,
+        "delta": 5.442000000000007,
+        "deltaPercent": 0.7122440005025767
+      },
+      {
+        "id": "timings.first-render-plain",
+        "label": "first-render-plain",
+        "unit": "ms",
+        "current": 454.888,
+        "baseline": 481.247,
+        "delta": -26.359000000000037,
+        "deltaPercent": -5.47722894895969
+      },
+      {
+        "id": "timings.repeat-render-plain",
+        "label": "repeat-render-plain",
+        "unit": "ms",
+        "current": 447.092,
+        "baseline": 466.422,
+        "delta": -19.33000000000004,
+        "deltaPercent": -4.144315662640278
+      },
+      {
+        "id": "timings.ready-to-fixture-request-rich",
+        "label": "ready-to-fixture-request-rich",
+        "unit": "ms",
+        "current": 769.69,
+        "baseline": 783.206,
+        "delta": -13.515999999999963,
+        "deltaPercent": -1.7257273309959273
+      },
+      {
+        "id": "timings.first-render-rich",
+        "label": "first-render-rich",
+        "unit": "ms",
+        "current": 700.479,
+        "baseline": 701.892,
+        "delta": -1.413000000000011,
+        "deltaPercent": -0.2013130225162861
+      },
+      {
+        "id": "timings.repeat-render-rich",
+        "label": "repeat-render-rich",
+        "unit": "ms",
+        "current": 573.33,
+        "baseline": 580.431,
+        "delta": -7.100999999999999,
+        "deltaPercent": -1.2234012311540905
+      },
+      {
+        "id": "timings.startup-warm",
+        "label": "startup-warm",
+        "unit": "ms",
+        "current": 3168.347,
+        "baseline": 3037.7,
+        "delta": 130.6470000000004,
+        "deltaPercent": 4.3008526187576255
+      }
+    ],
+    "memory": [
+      {
+        "id": "memory.empty.workingSet",
+        "label": "empty working set",
+        "unit": "bytes",
+        "current": 473829376,
+        "baseline": 489152512,
+        "delta": -15323136,
+        "deltaPercent": -3.132588635259835
+      },
+      {
+        "id": "memory.empty.private",
+        "label": "empty private memory",
+        "unit": "bytes",
+        "current": 295145472,
+        "baseline": 296882176,
+        "delta": -1736704,
+        "deltaPercent": -0.5849808915439908
+      },
+      {
+        "id": "memory.plain.workingSet",
+        "label": "plain working set",
+        "unit": "bytes",
+        "current": 494649344,
+        "baseline": 496402432,
+        "delta": -1753088,
+        "deltaPercent": -0.3531586243316391
+      },
+      {
+        "id": "memory.plain.private",
+        "label": "plain private memory",
+        "unit": "bytes",
+        "current": 305442816,
+        "baseline": 304549888,
+        "delta": 892928,
+        "deltaPercent": 0.2931959705728081
+      },
+      {
+        "id": "memory.rich.workingSet",
+        "label": "rich working set",
+        "unit": "bytes",
+        "current": 515964928,
+        "baseline": 520110080,
+        "delta": -4145152,
+        "deltaPercent": -0.7969759017168059
+      },
+      {
+        "id": "memory.rich.private",
+        "label": "rich private memory",
+        "unit": "bytes",
+        "current": 322678784,
+        "baseline": 315637760,
+        "delta": 7041024,
+        "deltaPercent": 2.23072930184272
+      }
+    ]
+  },
+  "unavailable": [
+    {
+      "section": "timings",
+      "scenario": "startup-cold-process",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    },
+    {
+      "section": "timings",
+      "scenario": "startup-cold-cdp-listener",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    },
+    {
+      "section": "timings",
+      "scenario": "startup-cold-cdp-target",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    },
+    {
+      "section": "timings",
+      "scenario": "startup-cold-document",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    },
+    {
+      "section": "timings",
+      "scenario": "startup-cold-interactive",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    },
+    {
+      "section": "timings",
+      "scenario": "startup-warm-process",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    },
+    {
+      "section": "timings",
+      "scenario": "startup-warm-cdp-listener",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    },
+    {
+      "section": "timings",
+      "scenario": "startup-warm-cdp-target",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    },
+    {
+      "section": "timings",
+      "scenario": "startup-warm-document",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    },
+    {
+      "section": "timings",
+      "scenario": "startup-warm-interactive",
+      "currentStatus": "measured",
+      "baselineStatus": "missing"
+    }
+  ]
+}
