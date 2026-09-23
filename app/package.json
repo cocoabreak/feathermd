@@ -39,8 +39,8 @@
   "license": "MIT",
   "dependencies": {
     "@lucide/svelte": "^1.24.0",
-    "@shikijs/langs": "^4.3.0",
-    "@shikijs/themes": "^4.3.0",
+    "@shikijs/langs": "4.3.1",
+    "@shikijs/themes": "4.3.1",
     "@tauri-apps/api": "^2",
     "@tauri-apps/plugin-dialog": "^2.7.1",
     "@tauri-apps/plugin-opener": "^2",
@@ -57,7 +57,7 @@
     "mermaid": "^11.16.0",
     "postcss": "^8.5.19",
     "postcss-prefix-selector": "^2.1.1",
-    "shiki": "^4.3.0"
+    "shiki": "4.3.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -68,7 +68,7 @@
     "@tauri-apps/cli": "^2",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/svelte": "^5.4.2",
-    "@types/markdown-it": "^14.1.2",
+    "@types/markdown-it": "14.1.2",
     "@types/markdown-it-emoji": "^3.0.1",
     "@types/markdown-it-footnote": "^3.0.4",
     "@types/postcss-prefix-selector": "^1.16.3",
