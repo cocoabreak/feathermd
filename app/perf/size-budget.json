@@ -3,7 +3,17 @@
   "source": {
     "baselineCommit": "a979f1a0c4cc3b2eae64ff128aa5fef25d4fa94f",
     "measurements": 3,
-    "maxObservedVariationPercent": 0.027
+    "maxObservedVariationPercent": 0.027,
+    "adjustments": [
+      {
+        "metric": "build.featureGroups.shiki.rawBytes",
+        "issue": "https://github.com/cocoabreak/feathermd/issues/49",
+        "shikiVersion": "4.4.3",
+        "previousBaselineBytes": 2393647,
+        "baselineBytes": 2579904,
+        "reason": "C++・Mermaid文法の拡張による増加を同一依存条件で確認し、対応言語を維持して採用。"
+      }
+    ]
   },
   "maxIncreasePercent": 5,
   "baselines": {
@@ -15,7 +25,7 @@
     "build.featureGroups.katex.brotliBytes": 1054897,
     "build.featureGroups.mermaid.rawBytes": 3450733,
     "build.featureGroups.mermaid.brotliBytes": 823514,
-    "build.featureGroups.shiki.rawBytes": 2393647,
+    "build.featureGroups.shiki.rawBytes": 2579904,
     "build.featureGroups.shiki.brotliBytes": 230118
   }
 }
