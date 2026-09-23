@@ -10,7 +10,7 @@
 - TypeScript 7.0.2は`@typescript-eslint` 8.63.0のpeer範囲`>=4.8.4 <6.1.0`外のため見送る
 - Cargoは`cargo update`でCargo.tomlの互換範囲内に限定して更新する
 - 直接依存で最低バージョンを明示している`ignore`、`regex`、`open`は更新後のバージョンへ合わせる
-- Rust `time`は`cookie`との既知互換性のため`<0.3.52`を維持する
+- Rust `time`は当初`cookie`との既知互換性のため`<0.3.52`を維持した。後続の #48 で `cookie 0.18.2` と `time 0.3.55` の互換性を検証し、不要な直接制約を解除する（`docs/releases/rust-dependencies-48.md` 参照）。
 
 ## npm audit
 
