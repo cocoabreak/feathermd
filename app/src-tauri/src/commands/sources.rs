@@ -3916,9 +3916,9 @@ mod tests {
         );
         #[cfg(windows)]
         let outside_absolute = if inside_absolute.to_ascii_uppercase().starts_with("Z:") {
-            "Y:/outside-feathermd/image.png"
+            "Y:/outside-hiranoa/image.png"
         } else {
-            "Z:/outside-feathermd/image.png"
+            "Z:/outside-hiranoa/image.png"
         };
         #[cfg(windows)]
         let absolute_images =

@@ -71,7 +71,7 @@ function result() {
           {
             pid: 100,
             parentPid: 1,
-            name: "feathermd.exe",
+            name: "hiranoa.exe",
             workingSet64: 1000,
             privateMemorySize64: 800,
           },
@@ -200,7 +200,7 @@ test("escapes result-controlled Markdown content", () => {
 });
 
 test("keeps acquired values and failure reasons in artifacts", (context) => {
-  const artifactsDir = mkdtempSync(path.join(os.tmpdir(), "feathermd-report-test-"));
+  const artifactsDir = mkdtempSync(path.join(os.tmpdir(), "hiranoa-report-test-"));
   context.after(() => rmSync(artifactsDir, { recursive: true, force: true }));
   const partial = result();
   partial.timings.push({
@@ -223,7 +223,7 @@ test("keeps acquired values and failure reasons in artifacts", (context) => {
 });
 
 test("CLI compares saved results and writes machine-readable artifacts", (context) => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "feathermd-report-cli-test-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "hiranoa-report-cli-test-"));
   context.after(() => rmSync(root, { recursive: true, force: true }));
   const currentFile = path.join(root, "current.json");
   const baselineFile = path.join(root, "baseline.json");

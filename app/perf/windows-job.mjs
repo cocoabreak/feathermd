@@ -27,7 +27,7 @@ const workspaceLeaseScript = path.join(
 );
 
 function assertJobName(jobName) {
-  if (!/^Local\\FeatherMD\.Performance\.[0-9a-f-]{36}$/.test(jobName)) {
+  if (!/^Local\\Hiranoa\.Performance\.[0-9a-f-]{36}$/.test(jobName)) {
     throw new Error("performance Job name is invalid");
   }
 }
@@ -371,7 +371,7 @@ export function waitForHostExit(host, timeoutMs, stderr, { requireSuccess = true
 }
 
 export async function launchPerformanceJob(workspace, spawnProcess = spawn) {
-  const jobName = `Local\\FeatherMD.Performance.${randomUUID()}`;
+  const jobName = `Local\\Hiranoa.Performance.${randomUUID()}`;
   const plan = performanceJobHostPlan(workspace, jobName);
   const host = spawnProcess(plan.command, plan.args, plan.options);
   let stderr = "";

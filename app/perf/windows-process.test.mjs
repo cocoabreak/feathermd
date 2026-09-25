@@ -24,7 +24,7 @@ const identity = {
   pid: 4242,
   parentPid: 100,
   creationTime: "2026-08-01T01:02:03.0000000Z",
-  executablePath: "c:\\build\\feathermd.exe",
+  executablePath: "c:\\build\\hiranoa.exe",
 };
 
 test("queries one validated PID without invoking a shell", () => {
@@ -43,7 +43,7 @@ test("parses and normalizes a Windows process identity", () => {
         pid: 4242,
         parentPid: 100,
         creationTime: "2026-08-01T01:02:03.0000000Z",
-        executablePath: "C:\\Build\\feathermd.exe",
+        executablePath: "C:\\Build\\hiranoa.exe",
       })
     ),
     identity
@@ -61,29 +61,29 @@ test("treats process-not-found as an absent identity", () => {
 });
 
 test("lists only a validated executable name", () => {
-  const plan = processListQueryPlan("feathermd.exe");
-  assert.match(plan.args.at(-1), /Name = 'feathermd\.exe'/);
-  assert.throws(() => processListQueryPlan("..\\feathermd.exe"), /name/);
+  const plan = processListQueryPlan("hiranoa.exe");
+  assert.match(plan.args.at(-1), /Name = 'hiranoa\.exe'/);
+  assert.throws(() => processListQueryPlan("..\\hiranoa.exe"), /name/);
   const execute = () => ({
     status: 0,
     stdout: JSON.stringify([identity, { ...identity, pid: 4243 }]),
   });
   assert.deepEqual(
-    listProcessIdentities("feathermd.exe", execute).map((entry) => entry.pid),
+    listProcessIdentities("hiranoa.exe", execute).map((entry) => entry.pid),
     [4242, 4243]
   );
 });
 
 test("checks the exact Tauri single-instance mutex without creating it", () => {
-  const plan = namedMutexQueryPlan("com.cocoabreak.feathermd-sim");
-  assert.match(plan.args.at(-1), /OpenExisting\('com\.cocoabreak\.feathermd-sim'\)/);
+  const plan = namedMutexQueryPlan("com.cocoabreak.hiranoa-sim");
+  assert.match(plan.args.at(-1), /OpenExisting\('com\.cocoabreak\.hiranoa-sim'\)/);
   assert.throws(() => namedMutexQueryPlan("../other-sim"), /mutex name/);
   assert.equal(
-    namedMutexExists("com.cocoabreak.feathermd-sim", () => ({ status: 0 })),
+    namedMutexExists("com.cocoabreak.hiranoa-sim", () => ({ status: 0 })),
     true
   );
   assert.equal(
-    namedMutexExists("com.cocoabreak.feathermd-sim", () => ({ status: 3 })),
+    namedMutexExists("com.cocoabreak.hiranoa-sim", () => ({ status: 3 })),
     false
   );
 });
@@ -174,8 +174,8 @@ test("queries one Windows process and memory snapshot without a shell", () => {
   const output = JSON.stringify([
     {
       ...identity,
-      executablePath: "C:\\Build\\feathermd.exe",
-      commandLine: "feathermd.exe",
+      executablePath: "C:\\Build\\hiranoa.exe",
+      commandLine: "hiranoa.exe",
       workingSet64: 4096,
       privateMemorySize64: 2048,
     },
@@ -192,7 +192,7 @@ test("queries one Windows process and memory snapshot without a shell", () => {
   assert.deepEqual(parseProcessMemorySnapshot(output), [
     {
       ...identity,
-      commandLine: "feathermd.exe",
+      commandLine: "hiranoa.exe",
       workingSet64: 4096,
       privateMemorySize64: 2048,
     },

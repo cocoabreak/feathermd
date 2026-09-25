@@ -81,13 +81,13 @@ jobs:
         with:
           projectPath: app
           tagName: v__VERSION__ # automatically replaces \_\_VERSION\_\_ with the app version
-          releaseName: "FeatherMD v__VERSION__"
+          releaseName: "Hiranoa v__VERSION__"
           releaseBody: |
-            FeatherMD v__VERSION__ is available.
+            Hiranoa v__VERSION__ is available.
 
-            FeatherMD is a read-only viewer for local Markdown files and Markdown documents stored in ZIP archives. It includes Mermaid and KaTeX rendering, search and quick navigation, session restoration, large-document safeguards, and privacy controls for external images.
+            Hiranoa is a read-only viewer for local Markdown files and Markdown documents stored in ZIP archives. It includes Mermaid and KaTeX rendering, search and quick navigation, session restoration, large-document safeguards, and privacy controls for external images.
 
-            On Windows, choose an MSI or NSIS installer for a standard installation, or the portable ZIP to run without installation. These binaries are currently unsigned and may trigger Microsoft Defender SmartScreen. Download FeatherMD only from this official release page.
+            On Windows, choose an MSI or NSIS installer for a standard installation, or the portable ZIP to run without installation. These binaries are currently unsigned and may trigger Microsoft Defender SmartScreen. Download Hiranoa only from this official release page.
 
             Linux and macOS artifacts are provided on a best-effort basis. macOS builds are not notarized.
 
@@ -103,16 +103,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $version = (Get-Content app/package.json | ConvertFrom-Json).version
-          $binary = 'app/src-tauri/target/release/feathermd.exe'
+          $binary = 'app/src-tauri/target/release/hiranoa.exe'
           if (-not (Test-Path -LiteralPath $binary)) {
             throw "Portable binary not found: $binary"
           }
 
-          $portableName = "FeatherMD_${version}_x64-portable"
+          $portableName = "Hiranoa_${version}_x64-portable"
           $portableDir = Join-Path '${{ runner.temp }}' $portableName
           $archivePath = Join-Path '${{ runner.temp }}' "$portableName.zip"
           New-Item -ItemType Directory -Force -Path $portableDir | Out-Null
-          Copy-Item -LiteralPath $binary -Destination (Join-Path $portableDir 'FeatherMD.exe')
+          Copy-Item -LiteralPath $binary -Destination (Join-Path $portableDir 'Hiranoa.exe')
           Copy-Item -LiteralPath LICENSE, README.md, README.ja.md -Destination $portableDir
           Compress-Archive -Path (Join-Path $portableDir '*') -DestinationPath $archivePath
 

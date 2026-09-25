@@ -101,7 +101,7 @@ test("validates measured timing and memory entries", () => {
       {
         pid: 100,
         parentPid: 1,
-        name: "feathermd.exe",
+        name: "hiranoa.exe",
         workingSet64: 100,
         privateMemorySize64: 80,
       },
@@ -129,7 +129,7 @@ test("rejects partial or inconsistent memory snapshots", () => {
       {
         pid: 100,
         parentPid: 1,
-        name: "feathermd.exe",
+        name: "hiranoa.exe",
         workingSet64: 100,
         privateMemorySize64: 80,
       },

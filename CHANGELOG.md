@@ -1,6 +1,15 @@
 # Changelog
 
-All notable changes to FeatherMD are documented in this file.
+All notable changes to Hiranoa (formerly FeatherMD) are documented in this file.
+
+## [0.3.0] - 2026-09-25
+
+### Changed
+
+- Renamed FeatherMD to Hiranoa, with an open-book application icon and updated distribution names, links, and development tools.
+- Changed the application identifier to `com.cocoabreak.hiranoa`. This is a fresh installation: settings, history, tabs, local fonts, and trusted folders are not migrated, and old application data is not automatically deleted.
+- Changed the Windows context-menu entry to Hiranoa. Disable the old entry in FeatherMD before uninstalling it, then register the new entry in Hiranoa if desired.
+- Moved the repository to `cocoabreak/hiranoa`. Older FeatherMD versions do not follow update-API redirects; download this release manually.
 
 ## [0.2.5] - 2026-09-23
 

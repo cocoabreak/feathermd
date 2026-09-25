@@ -24,14 +24,14 @@
 - CPUモデル、論理プロセッサ数、物理メモリ量
 - ストレージ種別を含む任意の基準環境メモ
 - WebView2 Runtime、Node.js、Rust、Tauri CLIのバージョン
-- FeatherMDのcommit SHA、アプリバージョン、dirty worktreeの有無
+- Hiranoaのcommit SHA、アプリバージョン、dirty worktreeの有無
 - 計測スキーマ、fixture ID、ビルド種別、実行日時
 
 実在する絶対パス、OSユーザー名、端末名は結果へ保存しない。比較可能性を損なう変更があった場合は既存値を上書きせず、新しい環境IDまたはスキーマバージョンでベースラインを作る。
 
 コールド起動は専用WebViewプロファイルとperformance AppDataを各試行前に空へ戻した起動、ウォーム起動は1回の計測外priming起動後に同じWebViewプロファイルとperformance AppDataを再利用する後続起動と定義する。`startup-cold` と `startup-warm` は別シナリオとし、それぞれ5回の個別値と中央値を持つ。どちらもCLI引数なしの空状態が操作可能になるまでを計測し、文書表示時間を混ぜない。OS再起動やファイルシステムキャッシュの完全消去は通常の反復手順には含めず、必要な場合だけ別の実機QAとして記録する。
 
-releaseビルドではdev限定の `FEATHERMD_E2E_STATE_DIR` とsingle-instance無効化を利用しない。`app/src-tauri/tauri.perf.conf.json` の設定overlayで通常版とは異なる固定identifierと表示名を指定し、tauri-plugin-storeが使うAppDataとsingle-instance名前空間を分離する。overlayはcapability、CSP、フロントエンド、Rust featureを変更しない。通常版とperformance版の4ストア（settings、tabs、recent、trusted root）が相互に読み書きされないことを統合テストで確認する。
+releaseビルドではdev限定の `HIRANOA_E2E_STATE_DIR` とsingle-instance無効化を利用しない。`app/src-tauri/tauri.perf.conf.json` の設定overlayで通常版とは異なる固定identifierと表示名を指定し、tauri-plugin-storeが使うAppDataとsingle-instance名前空間を分離する。overlayはcapability、CSP、フロントエンド、Rust featureを変更しない。通常版とperformance版の4ストア（settings、tabs、recent、trusted root）が相互に読み書きされないことを統合テストで確認する。
 
 各コールド試行でperformance AppDataを初期化するときは、Tauriのpath resolverが返すperformance identifier専用ディレクトリとの完全一致を確認する。通常版identifier、AppDataルート、親ディレクトリ、未解決パスを削除対象にしない。ウォーム試行では同じperformance AppDataを維持する。計測終了後の削除も同じ検証を通す。
 
@@ -186,7 +186,7 @@ Windows実機でのrelease計測と結果確認は `docs/releases/windows-perfor
 - CDP接続、表示完了、プロセス列挙には個別タイムアウトを設ける
 - 途中失敗でも取得済み試行と失敗理由をartifactへ残す
 - runner全体を `try/finally` で囲み、identityが一致するプロセスツリー、専用WebViewプロファイル、検証済みperformance AppData、一時fixtureを後始末する
-- 通常版と既存performance版のFeatherMDプロセスを終了対象にせず、runnerが起動してidentityを保持するPIDだけを追跡する
+- 通常版と既存performance版のHiranoaプロセスを終了対象にせず、runnerが起動してidentityを保持するPIDだけを追跡する
 - 既存インスタンスの不在確認と主プロセス起動の間に競合が発生した場合は、PIDとCDPプロファイルの所有関係を確認できなければ終了操作を行わない
 - 結果の書き込み前に絶対パス、OSユーザー名、fixture本文が含まれていないことを検証する
 
@@ -203,7 +203,7 @@ Windows実機でのrelease計測と結果確認は `docs/releases/windows-perfor
 
 ## 11. 初回Windows releaseベースライン（2026-08）
 
-commit `a979f1a0c4cc3b2eae64ff128aa5fef25d4fa94f`、FeatherMD 0.2.4、環境ID `windows-x64-i9-9900k-64gb-sata-2026-08` で初回releaseベースラインを確定した。機械可読値は `app/perf/baselines/windows-x64-i9-9900k-64gb-sata-2026-08.json`、環境、再現性、主要コスト、判断理由を含む要約は同名のMarkdownに保存する。
+commit `a979f1a0c4cc3b2eae64ff128aa5fef25d4fa94f`、Hiranoa 0.2.4、環境ID `windows-x64-i9-9900k-64gb-sata-2026-08` で初回releaseベースラインを確定した。機械可読値は `app/perf/baselines/windows-x64-i9-9900k-64gb-sata-2026-08.json`、環境、再現性、主要コスト、判断理由を含む要約は同名のMarkdownに保存する。
 
 同じcommitと環境でtimingとmemoryを2回ずつ実行し、全試行が成功した。run間の中央値差は起動で最大5.23%、描画で最大1.50%、memoryで最大1.31%だった。個別試行と1回目のcold起動に含まれた高い値は削除せずJSONへ保持する。今後のWindows release QAは同じ環境ID、schema、fixture、build typeで比較し、起動は少なくとも今回観測した変動を考慮する。
 

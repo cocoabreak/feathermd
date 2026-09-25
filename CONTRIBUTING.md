@@ -1,8 +1,8 @@
-# Contributing to FeatherMD
+# Contributing to Hiranoa
 
-Thank you for your interest in contributing to FeatherMD.
+Thank you for your interest in contributing to Hiranoa.
 
-FeatherMD is primarily maintained as an independent project with limited
+Hiranoa is primarily maintained as an independent project with limited
 maintenance capacity. Contributions are appreciated, but review and
 implementation are handled on a best-effort basis.
 
@@ -16,7 +16,7 @@ We welcome:
 
 When reporting a bug, please include:
 
-- The FeatherMD version or commit being used
+- The Hiranoa version or commit being used
 - Operating system and relevant environment details
 - Steps to reproduce
 - Expected behavior
@@ -24,7 +24,7 @@ When reporting a bug, please include:
 - A minimal reproduction, when possible
 
 Usage questions and general discussions should be posted in
-[GitHub Discussions](https://github.com/cocoabreak/feathermd/discussions).
+[GitHub Discussions](https://github.com/cocoabreak/hiranoa/discussions).
 
 Please do not report security vulnerabilities in public issues. See
 [SECURITY.md](SECURITY.md) for reporting instructions.
@@ -82,8 +82,8 @@ maintenance capacity.
 ### Build and run
 
 ```bash
-git clone https://github.com/cocoabreak/feathermd.git
-cd feathermd/app
+git clone https://github.com/cocoabreak/hiranoa.git
+cd hiranoa/app
 npm ci
 npm run tauri dev
 ```

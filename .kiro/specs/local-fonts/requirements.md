@@ -2,13 +2,13 @@
 
 ## 背景・動機
 
-FeatherMDはカスタムCSSに対応しているが、安全性を維持するため `url()` と `@import` を禁止している。そのため、ユーザーが所有するローカルフォントをMarkdown本文へ適用する安全な経路がない。
+HiranoaはカスタムCSSに対応しているが、安全性を維持するため `url()` と `@import` を禁止している。そのため、ユーザーが所有するローカルフォントをMarkdown本文へ適用する安全な経路がない。
 
 任意の外部リソース参照を解禁せず、ネイティブファイル選択で明示されたフォントだけを用途限定で取り込み、アプリUIへ影響させずMarkdown本文へ適用できるようにする。
 
 関連:
 
-- [Issue #13: Markdown本文へローカルフォントを設定できるようにする](https://github.com/cocoabreak/feathermd/issues/13)
+- [Issue #13: Markdown本文へローカルフォントを設定できるようにする](https://github.com/cocoabreak/hiranoa/issues/13)
 - [カスタムCSS要求](../custom-css/requirements.md)
 - [コンテンツズーム要求](../content-zoom/requirements.md)
 - [エクスポート要求](../export-document/requirements.md)

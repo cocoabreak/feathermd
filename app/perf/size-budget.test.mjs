@@ -104,7 +104,7 @@ test("rejects missing or invalid current metrics instead of treating them as zer
 });
 
 test("writes reviewable JSON and Markdown artifacts before CI failure", (context) => {
-  const root = mkdtempSync(path.join(os.tmpdir(), "feathermd-size-budget-test-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "hiranoa-size-budget-test-"));
   context.after(() => rmSync(root, { recursive: true, force: true }));
   const assessment = evaluateSizeBudget(
     build({ initial: { rawBytes: 211, brotliBytes: 100 } }),

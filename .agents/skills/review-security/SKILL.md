@@ -1,6 +1,6 @@
 ---
 name: review-security
-description: Perform a threat-focused security review of FeatherMD changes. Use before commit or merge whenever changes touch filesystem access, trusted roots, paths, HTML/SVG/CSS rendering or sanitization, Tauri commands/capabilities/CSP, external URLs or processes, plugins, persistence, CLI or drag-and-drop input, watchers, exports, or dependency security; also use when explicitly asked for a security review.
+description: Perform a threat-focused security review of Hiranoa changes. Use before commit or merge whenever changes touch filesystem access, trusted roots, paths, HTML/SVG/CSS rendering or sanitization, Tauri commands/capabilities/CSP, external URLs or processes, plugins, persistence, CLI or drag-and-drop input, watchers, exports, or dependency security; also use when explicitly asked for a security review.
 ---
 
 # セキュリティレビュー

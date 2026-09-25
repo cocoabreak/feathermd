@@ -15,7 +15,7 @@ fn file_for_kind(kind: &str) -> Result<&'static str, String> {
 fn store_path_for_kind(kind: &str) -> Result<PathBuf, String> {
     let file = file_for_kind(kind)?;
     #[cfg(debug_assertions)]
-    if let Some(dir) = std::env::var_os("FEATHERMD_E2E_STATE_DIR") {
+    if let Some(dir) = std::env::var_os("HIRANOA_E2E_STATE_DIR") {
         let dir = PathBuf::from(dir);
         if dir.is_absolute() {
             return Ok(dir.join(file));

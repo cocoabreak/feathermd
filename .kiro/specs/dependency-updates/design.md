@@ -14,7 +14,7 @@
 
 ## npm audit
 
-更新前は`@sveltejs/kit`から`cookie <0.7.0`へ至るlow severity advisoryが1件あり、影響する直接依存を含め3件と集計される。現時点のSvelteKit最新版2.69.2も対象で、`npm audit fix`は古い0.0.xへの破壊的ダウングレードを提示するため適用しない。FeatherMDはstatic adapterでサーバーCookie処理を配布しないが、上流修正版が公開された時点で更新する。
+更新前は`@sveltejs/kit`から`cookie <0.7.0`へ至るlow severity advisoryが1件あり、影響する直接依存を含め3件と集計される。現時点のSvelteKit最新版2.69.2も対象で、`npm audit fix`は古い0.0.xへの破壊的ダウングレードを提示するため適用しない。Hiranoaはstatic adapterでサーバーCookie処理を配布しないが、上流修正版が公開された時点で更新する。
 
 ## 検証
 

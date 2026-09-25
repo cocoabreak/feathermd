@@ -55,20 +55,20 @@ export function isProductionTauriUrl(value) {
   }
 }
 
-export function assertNoForeignFeatherMdProcesses(appIdentity, identities) {
+export function assertNoForeignHiranoaProcesses(appIdentity, identities) {
   assert.ok(appIdentity, "performance app identity is missing");
-  assert.ok(Array.isArray(identities), "FeatherMD background process query is invalid");
+  assert.ok(Array.isArray(identities), "Hiranoa background process query is invalid");
   const foreign = identities.filter(
     (identity) =>
       identity.pid !== appIdentity.pid ||
       identity.creationTime !== appIdentity.creationTime ||
       identity.executablePath !== appIdentity.executablePath
   );
-  assert.equal(foreign.length, 0, "another FeatherMD process started after performance preflight");
+  assert.equal(foreign.length, 0, "another Hiranoa process started after performance preflight");
 }
 
-export function createFeatherMdBackgroundGuard(appIdentity, listProcesses = listProcessIdentities) {
-  return () => assertNoForeignFeatherMdProcesses(appIdentity, listProcesses("feathermd.exe"));
+export function createHiranoaBackgroundGuard(appIdentity, listProcesses = listProcessIdentities) {
+  return () => assertNoForeignHiranoaProcesses(appIdentity, listProcesses("hiranoa.exe"));
 }
 
 export function seedPerformanceStores(workspace, write = writeFileSync) {
@@ -285,7 +285,7 @@ export async function launchReadyPerformanceApp(workspace) {
       path.win32.normalize(workspace.command).toLowerCase(),
       "Job-owned PID does not match the performance executable"
     );
-    const assertBackgroundCondition = createFeatherMdBackgroundGuard(appIdentity);
+    const assertBackgroundCondition = createHiranoaBackgroundGuard(appIdentity);
     assertBackgroundCondition();
     const processReadyAt = performance.now();
 
@@ -403,7 +403,7 @@ export async function measurePerformanceMemoryScenario(
     const port = await allocatePort();
     const plan = prepareLaunch({
       port,
-      runDir: path.win32.join(os.tmpdir(), "feathermd-performance-memory-planned"),
+      runDir: path.win32.join(os.tmpdir(), "hiranoa-performance-memory-planned"),
     });
     workspace = createWorkspace(plan);
     const materializedFixture = fixture ? materializeFixture(workspace, fixture) : null;
@@ -462,7 +462,7 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
   const port = await findFreePort();
   const plan = preparePerformanceLaunch({
     port,
-    runDir: path.win32.join(os.tmpdir(), "feathermd-performance-planned"),
+    runDir: path.win32.join(os.tmpdir(), "hiranoa-performance-planned"),
   });
   const normalStoresBefore = snapshotStores(plan.normalAppDataDir);
   let workspace;
@@ -522,7 +522,7 @@ export async function verifyPerformanceLaunch({ fixtureId = "plain-v1" } = {}) {
     assert.deepEqual(
       snapshotStores(plan.normalAppDataDir),
       normalStoresBefore,
-      "normal FeatherMD stores changed during performance launch"
+      "normal Hiranoa stores changed during performance launch"
     );
 
     result = {

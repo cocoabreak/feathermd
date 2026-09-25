@@ -44,7 +44,7 @@ export interface PostRenderContext {
 export interface ViewerPlugin {
   /** 設定キー兼識別子（settings.renderers のキーになる） */
   name: string;
-  /** FeatherMD内蔵プラグインとしてのバージョン */
+  /** Hiranoa内蔵プラグインとしてのバージョン */
   version: string;
   /** 外部レンダリングエンジンを利用する場合の表示名とnpmパッケージ名 */
   engine?: { displayName: string; packageName: string };

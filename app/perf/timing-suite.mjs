@@ -95,7 +95,7 @@ function failureReason(error) {
   if (typeof error?.code === "string" && /^[A-Z0-9_]+$/.test(error.code)) return error.code;
   const message = typeof error?.message === "string" ? error.message : "";
   if (message.includes("performance AppData already exists")) return "PERFORMANCE_APPDATA_EXISTS";
-  if (message.includes("FeatherMD is already running")) return "BACKGROUND_FEATHERMD_RUNNING";
+  if (message.includes("Hiranoa is already running")) return "BACKGROUND_HIRANOA_RUNNING";
   if (message.includes("timed out")) return "PERFORMANCE_TRIAL_TIMEOUT";
   if (typeof error?.name === "string" && /^[A-Za-z]+$/.test(error.name)) return error.name;
   return "PerformanceTrialError";
@@ -219,7 +219,7 @@ export async function runWarmStartupSuite({
     if (signal?.aborted) throw new Error("performance warm suite was interrupted");
     const plan = prepareLaunch({
       port,
-      runDir: path.win32.join(os.tmpdir(), "feathermd-performance-warm-planned"),
+      runDir: path.win32.join(os.tmpdir(), "hiranoa-performance-warm-planned"),
     });
     workspace = createWorkspace(plan);
     assertWorkspaceIdentity(workspace);

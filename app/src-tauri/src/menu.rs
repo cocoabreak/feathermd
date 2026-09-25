@@ -47,7 +47,7 @@ const JA: MenuLabels = MenuLabels {
     toggle_toc: "目次の表示/非表示",
     command_palette: "コマンドパレット...",
     help_menu: "ヘルプ",
-    about: "FeatherMDについて",
+    about: "Hiranoaについて",
 };
 
 const EN: MenuLabels = MenuLabels {
@@ -70,7 +70,7 @@ const EN: MenuLabels = MenuLabels {
     toggle_toc: "Toggle Table of Contents",
     command_palette: "Command Palette...",
     help_menu: "Help",
-    about: "About FeatherMD",
+    about: "About Hiranoa",
 };
 
 fn labels(locale: &str) -> &'static MenuLabels {

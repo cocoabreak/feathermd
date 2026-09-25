@@ -1,11 +1,11 @@
 [package]
-name = "feathermd"
-version = "0.2.5"
-description = "FeatherMD, a lightweight read-only Markdown viewer"
+name = "hiranoa"
+version = "0.3.0"
+description = "Hiranoa, a lightweight read-only Markdown viewer"
 authors = ["Hirofumi Akiyama"]
 license = "MIT"
-repository = "https://github.com/cocoabreak/feathermd"
-homepage = "https://github.com/cocoabreak/feathermd"
+repository = "https://github.com/cocoabreak/hiranoa"
+homepage = "https://github.com/cocoabreak/hiranoa"
 edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html

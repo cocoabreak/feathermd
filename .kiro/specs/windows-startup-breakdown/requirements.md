@@ -42,7 +42,7 @@ So that warm起動を支配するrunnerまたはアプリ側の処理だけを�
 ### US-003: 隔離・安全境界の維持
 
 As a 利用者
-I want performance計測が通常利用中のFeatherMDへ影響しないでほしい
+I want performance計測が通常利用中のHiranoaへ影響しないでほしい
 So that 計測中も通常版の設定・入力・プロセスが保護される
 
 **受け入れ条件**

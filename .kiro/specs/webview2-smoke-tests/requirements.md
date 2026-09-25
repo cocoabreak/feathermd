@@ -2,13 +2,13 @@
 
 ## 背景・動機
 
-FeatherMDにはVitestとRustユニットテストがある一方、Tauri・WebView2・フロントエンド・Rustコマンドを結合した実アプリの確認は `run-feathermd` スキルによる対話操作に依存している。Markdown表示、Mermaid、ZIP、大容量文書、更新通知、セッション復元の主要経路を対話可能なローカルWindowsで継続検証し、単体テストでは検出できない統合回帰をリリース前に検出する。GitHub hosted Windows runnerでは本番フロントエンドとTauriアプリのビルド可能性を検証する。
+HiranoaにはVitestとRustユニットテストがある一方、Tauri・WebView2・フロントエンド・Rustコマンドを結合した実アプリの確認は `run-hiranoa` スキルによる対話操作に依存している。Markdown表示、Mermaid、ZIP、大容量文書、更新通知、セッション復元の主要経路を対話可能なローカルWindowsで継続検証し、単体テストでは検出できない統合回帰をリリース前に検出する。GitHub hosted Windows runnerでは本番フロントエンドとTauriアプリのビルド可能性を検証する。
 
 ## スコープ
 
 - **対象**: Windows WebView2上のdevビルド、CDPによる起動・DOM操作・状態確認、決定的fixture、ローカル実行時の失敗artifact、GitHub hosted Windows runnerでの本番フロントエンド・Tauriビルド
 - **対象外**: MSI/NSIS/portable配布物、インストール・アンインストール、実GitHub Releases API、Linux WebKitGTK、macOS WKWebView、ネイティブファイルダイアログ自体の自動操作
-- 既存 `run-feathermd` は対話確認用として維持し、自動スモークテストと低レベルCDP処理だけを共有する
+- 既存 `run-hiranoa` は対話確認用として維持し、自動スモークテストと低レベルCDP処理だけを共有する
 
 ---
 
@@ -25,7 +25,7 @@ So that 主要な実アプリ回帰をコミット前に確認できる
 - [x] Windowsで `npm run e2e:smoke` を実行するとTauri devアプリが専用WebViewプロファイルで起動する
 - [x] テスト終了時は成功・失敗にかかわらずアプリのプロセスツリーと一時fixtureを後始末する
 - [x] 各シナリオの成功・失敗がテスト名とともに標準出力へ表示され、1件でも失敗すれば非0で終了する
-- [x] 既存の対話用 `run-feathermd` 操作は従来どおり利用できる
+- [x] 既存の対話用 `run-hiranoa` 操作は従来どおり利用できる
 
 ### US-002: 主要レンダリング経路の検証
 

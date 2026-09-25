@@ -5,7 +5,7 @@ const available: UpdateCheckResult = {
   currentVersion: "0.1.0",
   latestVersion: "0.2.0",
   updateAvailable: true,
-  releaseUrl: "https://github.com/cocoabreak/feathermd/releases",
+  releaseUrl: "https://github.com/cocoabreak/hiranoa/releases",
 };
 
 describe("updateCheckStore", () => {

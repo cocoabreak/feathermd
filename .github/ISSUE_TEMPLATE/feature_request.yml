@@ -1,5 +1,5 @@
 name: Feature request / 機能要望
-description: Suggest a focused improvement for FeatherMD / FeatherMDの機能改善を提案する
+description: Suggest a focused improvement for Hiranoa / Hiranoaの機能改善を提案する
 title: "[Feature]: "
 labels:
   - enhancement
@@ -23,7 +23,7 @@ body:
     id: proposal
     attributes:
       label: Proposed behavior / 希望する動作
-      description: Describe how you would like FeatherMD to behave. / FeatherMDがどのように動作するとよいか記載してください。
+      description: Describe how you would like Hiranoa to behave. / Hiranoaがどのように動作するとよいか記載してください。
     validations:
       required: true
 

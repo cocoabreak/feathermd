@@ -128,9 +128,9 @@ mod tests {
 
     #[test]
     fn user_cli_args_excludes_executable_and_keeps_32_inputs() {
-        let mut args = vec!["feathermd.exe".to_string()];
+        let mut args = vec!["hiranoa.exe".to_string()];
         args.extend((0..(MAX_INPUT_PATHS + 2)).map(|i| format!("note-{i}.md")));
-        let cwd = std::env::temp_dir().join("feathermd-cli-test");
+        let cwd = std::env::temp_dir().join("hiranoa-cli-test");
 
         let result = user_cli_args(args, &cwd);
 
@@ -144,21 +144,19 @@ mod tests {
 
     #[test]
     fn user_cli_args_resolves_relative_paths_against_request_cwd() {
-        let cwd = std::env::temp_dir().join("feathermd-project");
-        let result = user_cli_args(vec!["feathermd.exe".into(), "docs/guide.md".into()], &cwd);
+        let cwd = std::env::temp_dir().join("hiranoa-project");
+        let result = user_cli_args(vec!["hiranoa.exe".into(), "docs/guide.md".into()], &cwd);
 
         assert_eq!(PathBuf::from(&result[0]), cwd.join("docs/guide.md"));
     }
 
     #[test]
     fn user_cli_args_keeps_absolute_paths() {
-        let absolute = std::env::temp_dir()
-            .join("feathermd-notes")
-            .join("README.md");
+        let absolute = std::env::temp_dir().join("hiranoa-notes").join("README.md");
         let ignored_cwd = std::env::temp_dir().join("ignored");
         let result = user_cli_args(
             vec![
-                "feathermd.exe".into(),
+                "hiranoa.exe".into(),
                 absolute.to_string_lossy().into_owned(),
             ],
             &ignored_cwd,
@@ -170,7 +168,7 @@ mod tests {
     #[test]
     fn user_cli_args_drops_relative_paths_when_request_cwd_is_invalid() {
         let result = user_cli_args(
-            vec!["feathermd.exe".into(), "README.md".into()],
+            vec!["hiranoa.exe".into(), "README.md".into()],
             Path::new(""),
         );
 

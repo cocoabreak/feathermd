@@ -1,15 +1,15 @@
 {
-  "name": "feathermd",
-  "version": "0.2.5",
+  "name": "hiranoa",
+  "version": "0.3.0",
   "description": "A fast, read-only Markdown viewer for local files.",
   "type": "module",
   "repository": {
     "type": "git",
-    "url": "https://github.com/cocoabreak/feathermd.git"
+    "url": "https://github.com/cocoabreak/hiranoa.git"
   },
-  "homepage": "https://github.com/cocoabreak/feathermd",
+  "homepage": "https://github.com/cocoabreak/hiranoa",
   "bugs": {
-    "url": "https://github.com/cocoabreak/feathermd/issues"
+    "url": "https://github.com/cocoabreak/hiranoa/issues"
   },
   "engines": {
     "node": ">=24 <25"

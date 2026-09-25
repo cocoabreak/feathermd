@@ -7,7 +7,7 @@ inclusion: always
 ## ディレクトリ構成
 
 ```
-feathermd/
+hiranoa/
 ├── .kiro/
 │   ├── steering/           # AI共通コンテキスト（常時参照）
 │   │   ├── product.md      # プロダクトビジョン・目標
@@ -22,7 +22,7 @@ feathermd/
 │   └── skills/                   # Codex用のプロジェクト固有ワークフロー
 │       ├── review-design-diff/   # 設計・差分レビュー
 │       ├── review-security/      # セキュリティレビュー
-│       └── run-feathermd/         # 実アプリ起動・操作・確認
+│       └── run-hiranoa/         # 実アプリ起動・操作・確認
 ├── docs/
 │   └── decisions/          # 意思決定記録 (ADR)
 ├── CLAUDE.md               # Claude Code用（steering/を参照）
