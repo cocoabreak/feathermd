@@ -7,7 +7,7 @@
     "adjustments": [
       {
         "metric": "build.featureGroups.shiki.rawBytes",
-        "issue": "https://github.com/cocoabreak/feathermd/issues/49",
+        "issue": "https://github.com/cocoabreak/hiranoa/issues/49",
         "shikiVersion": "4.4.3",
         "previousBaselineBytes": 2393647,
         "baselineBytes": 2579904,

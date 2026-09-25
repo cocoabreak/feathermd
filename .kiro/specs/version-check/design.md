@@ -13,7 +13,7 @@ startup / AboutDialog
         |
  check_for_updates (Tauri command)
         |
- GitHub REST: cocoabreak/feathermd/releases/latest
+ GitHub REST: cocoabreak/hiranoa/releases/latest
 ```
 
 - WebViewのCSPは広げず、HTTPS通信はRust側だけで行う

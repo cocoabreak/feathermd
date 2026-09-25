@@ -1,26 +1,22 @@
-# FeatherMD
+# Hiranoa
 
 <p align="center">
-  <img src="app/src-tauri/icons/icon-source.png" alt="FeatherMDロゴ" width="180">
+  <img src="docs/images/hiranoa-logo-rounded.svg" alt="Hiranoaロゴ" width="180">
 </p>
 
 [English](README.md)
 
-FeatherMDは、ローカルMarkdownファイルとZIPアーカイブ内のMarkdownを対象にした高速な読み取り専用ビューワーです。Tauri v2・RustバックエンドとSvelte 5のUIを組み合わせ、編集機能を持たせず、Markdownの快適な閲覧に集中しています。
+Hiranoaは、ローカルMarkdownファイルとZIPアーカイブ内のMarkdownを対象にした高速な読み取り専用ビューワーです。Tauri v2・RustバックエンドとSvelte 5のUIを組み合わせ、編集機能を持たせず、Markdownの快適な閲覧に集中しています。
 
 > 現在はWindowsを最優先で対応しています。LinuxはNice to have、macOSは優先度を低く設定しています。
 
 ## 動作イメージ
 
 <p align="center">
-  <img src="docs/images/feathermd-overview.png" alt="リンクインスペクターとローカルリンク先プレビューを表示するFeatherMD" width="1000">
+  <img src="docs/images/hiranoa-link-demo.gif" alt="Hiranoaでリンク先をプレビューし、ローカルリンクグラフのノードをクリックして文書へ移動するデモ" width="1000">
 </p>
 
-<p align="center"><em>閲覧位置を保ったまま、ローカルMarkdownのリンク先を確認できます。</em></p>
-
-<p align="center">
-  <img src="docs/images/link-preview-demo.gif" alt="本文とローカルリンクグラフでのホバープレビュー" width="900">
-</p>
+<p align="center"><em>リンク先をプレビューし、ローカルリンクグラフでつながりを確認。ノードをクリックすると、その文書へジャンプできます。</em></p>
 
 ## 主な機能
 
@@ -38,7 +34,7 @@ FeatherMDは、ローカルMarkdownファイルとZIPアーカイブ内のMarkdo
 
 ## セキュリティモデル
 
-FeatherMDは、Markdownを信頼できない入力として扱います。以下の保証はreleaseビルドを対象としています。
+Hiranoaは、Markdownを信頼できない入力として扱います。以下の保証はreleaseビルドを対象としています。
 
 - ファイルアクセスはRust側でcanonicalizeし、許可済みルート配下か検証します。
 - ドライブ直下、Windowsのシステムフォルダー、ユーザープロファイル直下を広い信頼ルートにはできません。
@@ -70,15 +66,21 @@ FeatherMDは、Markdownを信頼できない入力として扱います。以下
 
 ## インストール
 
-リリースパッケージは[GitHub Releases](https://github.com/cocoabreak/feathermd/releases)で公開します。
+### FeatherMDからの切り替え
 
-リリースバイナリにはコード署名を付けていません。そのため、Windows Defender SmartScreenに「認識されないアプリ」の警告が表示される場合があり、macOSでも未公証のアプリとして明示的な許可が必要になる場合があります。FeatherMDは必ず上記の公式Releasesページからダウンロードし、OSの警告を回避する前に入手元が信頼できることを確認してください。
+Hiranoa 0.3.0はFeatherMDの改名後のバージョンで、別アプリとして新規インストールします。設定・履歴・タブ・ローカルフォント・信頼済みフォルダーは引き継ぎません。旧FeatherMDのデータを自動削除することもありません。
 
-| プラットフォーム              | サポート水準 | 配布に関する補足                                                                                                       |
-| ----------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------------- |
-| Windows x64                   | 最優先       | MSI・NSIS（`.exe`）インストーラーと`FeatherMD_<version>_x64-portable.zip`。Microsoft Edge WebView2 Runtimeが必要です。 |
-| Linux x64                     | Best effort  | CIで生成したパッケージを公開します。デスクトップ統合の動作はディストリビューションにより異なる場合があります。         |
-| macOS（Apple Silicon／Intel） | 試験的       | Universal版をCIで生成しますが、サポート優先度は最も低く、アプリは公証されていません。                                  |
+旧FeatherMDをアンインストールする前に、設定でWindowsの右クリックメニュー登録を解除してください。その後Hiranoaをインストールし、利用するフォルダーを再選択し、必要なら右クリックメニューを登録します。旧版を指定したファイル関連付けやショートカットも設定し直してください。旧版の更新確認はリポジトリ改名後に失敗する場合があるため、下記Releasesから手動でダウンロードしてください。
+
+リリースパッケージは[GitHub Releases](https://github.com/cocoabreak/hiranoa/releases)で公開します。
+
+リリースバイナリにはコード署名を付けていません。そのため、Windows Defender SmartScreenに「認識されないアプリ」の警告が表示される場合があり、macOSでも未公証のアプリとして明示的な許可が必要になる場合があります。Hiranoaは必ず上記の公式Releasesページからダウンロードし、OSの警告を回避する前に入手元が信頼できることを確認してください。
+
+| プラットフォーム              | サポート水準 | 配布に関する補足                                                                                                     |
+| ----------------------------- | ------------ | -------------------------------------------------------------------------------------------------------------------- |
+| Windows x64                   | 最優先       | MSI・NSIS（`.exe`）インストーラーと`Hiranoa_<version>_x64-portable.zip`。Microsoft Edge WebView2 Runtimeが必要です。 |
+| Linux x64                     | Best effort  | CIで生成したパッケージを公開します。デスクトップ統合の動作はディストリビューションにより異なる場合があります。       |
+| macOS（Apple Silicon／Intel） | 試験的       | Universal版をCIで生成しますが、サポート優先度は最も低く、アプリは公証されていません。                                |
 
 ### ビルドの前提環境
 
@@ -92,8 +94,8 @@ FeatherMDは、Markdownを信頼できない入力として扱います。以下
 ### ソースコードからビルド・実行
 
 ```bash
-git clone https://github.com/cocoabreak/feathermd.git
-cd feathermd/app
+git clone https://github.com/cocoabreak/hiranoa.git
+cd hiranoa/app
 npm ci
 npm run tauri dev
 ```
@@ -129,10 +131,6 @@ cargo test
 
 リリース履歴は[CHANGELOG](CHANGELOG.md)を参照してください。
 
-## 免責事項
-
-FeatherMDは独立したオープンソースプロジェクトです。「Feather」の名称を持つ他の製品またはプロジェクトとの提携、資金提供、承認関係はありません。
-
 ## ライセンス
 
-FeatherMDは[MIT License](LICENSE)で公開されています。
+Hiranoaは[MIT License](LICENSE)で公開されています。

@@ -25,10 +25,10 @@ mod platform {
     use windows_sys::Win32::UI::Shell::{SHChangeNotify, SHCNE_ASSOCCHANGED, SHCNF_IDLIST};
 
     const VERB_PATHS: [&str; 2] = [
-        r"Software\Classes\SystemFileAssociations\.md\shell\FeatherMD.Open",
-        r"Software\Classes\SystemFileAssociations\.markdown\shell\FeatherMD.Open",
+        r"Software\Classes\SystemFileAssociations\.md\shell\Hiranoa.Open",
+        r"Software\Classes\SystemFileAssociations\.markdown\shell\Hiranoa.Open",
     ];
-    const VERB_LABEL: &str = "FeatherMDで開く";
+    const VERB_LABEL: &str = "Hiranoaで開く";
 
     struct OwnedKey(HKEY);
 
@@ -181,7 +181,7 @@ mod platform {
 
     fn delete_verb(verb_path: &str) -> Result<(), String> {
         let path = wide(OsStr::new(verb_path));
-        // SAFETY: NUL終端済み固定パスと有効なHKCUを渡す。削除対象はFeatherMD所有verbのみ。
+        // SAFETY: NUL終端済み固定パスと有効なHKCUを渡す。削除対象はHiranoa所有verbのみ。
         let code = unsafe { RegDeleteTreeW(HKEY_CURRENT_USER, path.as_ptr()) };
         if code == ERROR_SUCCESS || code == ERROR_FILE_NOT_FOUND || code == ERROR_PATH_NOT_FOUND {
             return Ok(());

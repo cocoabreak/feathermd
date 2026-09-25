@@ -61,7 +61,7 @@ describe("SettingsPanel", () => {
     await fireEvent.click(screen.getByRole("button", { name: "ファイル" }));
 
     const checkbox = await screen.findByRole("checkbox", {
-      name: "右クリックに「FeatherMDで開く」を追加",
+      name: "右クリックに「Hiranoaで開く」を追加",
     });
     await waitFor(() => expect(checkbox).not.toBeChecked());
 
@@ -93,7 +93,7 @@ describe("SettingsPanel", () => {
     render(SettingsPanel, { onclose: vi.fn() });
     await fireEvent.click(screen.getByRole("button", { name: "Files" }));
     const checkbox = await screen.findByRole("checkbox", {
-      name: 'Add "Open with FeatherMD" to the context menu',
+      name: 'Add "Open with Hiranoa" to the context menu',
     });
     await fireEvent.click(checkbox);
 

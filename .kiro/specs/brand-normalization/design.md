@@ -1,5 +1,7 @@
 # 技術設計: FeatherMDブランド統一 (brand-normalization)
 
+> v0.1.0時点の履歴。現行名称・識別子・公開先は[Hiranoa改名設計](../hiranoa-rename/design.md)を参照。
+
 ## ステータス
 
 完了

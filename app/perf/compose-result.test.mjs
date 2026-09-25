@@ -89,7 +89,7 @@ function memoryEntry(scenario, pid) {
       {
         pid,
         parentPid: 0,
-        name: "feathermd.exe",
+        name: "hiranoa.exe",
         workingSet64: 20,
         privateMemorySize64: 10,
       },
@@ -112,8 +112,8 @@ const environment = {
 };
 
 test("composePerformanceResult combines complete measurements without exposing paths", () => {
-  const directory = mkdtempSync(path.join(os.tmpdir(), "feathermd-compose-"));
-  const executable = path.join(directory, "feathermd.exe");
+  const directory = mkdtempSync(path.join(os.tmpdir(), "hiranoa-compose-"));
+  const executable = path.join(directory, "hiranoa.exe");
   writeFileSync(executable, "binary");
   const result = composePerformanceResult({
     buildResult: buildResult(),
@@ -176,15 +176,15 @@ test("composePerformanceResult rejects dirty or incomplete inputs", () => {
         memoryResult,
         environment,
         buildType: "windows-x64-release-qa",
-        distributionPaths: { executable: path.join(os.tmpdir(), "missing-feathermd.exe") },
+        distributionPaths: { executable: path.join(os.tmpdir(), "missing-hiranoa.exe") },
       }),
     /specified distribution was not measured/
   );
 });
 
 test("parseDistributionArguments accepts known unique kinds only", () => {
-  const parsed = parseDistributionArguments(["executable=release/feathermd.exe"]);
-  assert.equal(parsed.executable, path.resolve("release/feathermd.exe"));
+  const parsed = parseDistributionArguments(["executable=release/hiranoa.exe"]);
+  assert.equal(parsed.executable, path.resolve("release/hiranoa.exe"));
   assert.throws(() => parseDistributionArguments(["deb=release/app.deb"]), /invalid/);
   assert.throws(() => parseDistributionArguments(["msi=first.msi", "msi=second.msi"]), /duplicate/);
 });

@@ -1,6 +1,6 @@
-# FeatherMD application
+# Hiranoa application
 
-This directory contains the SvelteKit frontend and Tauri backend for FeatherMD.
+This directory contains the SvelteKit frontend and Tauri backend for Hiranoa.
 
 Use the repository-level [README](../README.md) for product information, setup instructions, and quality checks.
 

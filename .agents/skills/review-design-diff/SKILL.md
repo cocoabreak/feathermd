@@ -1,6 +1,6 @@
 ---
 name: review-design-diff
-description: Review FeatherMD changes for specification alignment, architectural consistency, regressions, error handling, maintainability, and missing tests. Use after implementation and deterministic checks are complete, before commit or merge, for feature, bug-fix, refactor, dependency, persistence, or cross-layer changes; also use when explicitly asked for a code, design, or diff review.
+description: Review Hiranoa changes for specification alignment, architectural consistency, regressions, error handling, maintainability, and missing tests. Use after implementation and deterministic checks are complete, before commit or merge, for feature, bug-fix, refactor, dependency, persistence, or cross-layer changes; also use when explicitly asked for a code, design, or diff review.
 ---
 
 # 設計・差分レビュー

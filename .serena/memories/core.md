@@ -1,4 +1,4 @@
-# FeatherMD project map
+# Hiranoa project map
 - Product: local Markdown viewer; viewer-only, no editing. Windows Must, Linux Nice-to-have, macOS lowest priority.
 - Frontend: `app/src` (SvelteKit). Read `mem:frontend/core` for state/actions/rendering structure.
 - Backend: `app/src-tauri/src` (Tauri v2/Rust). Read `mem:backend/core` for commands and filesystem trust boundary.

@@ -18,7 +18,7 @@ test("parses only a valid Job-owned PID", () => {
 });
 
 test("validates Job membership query results", () => {
-  const jobName = "Local\\FeatherMD.Performance.01234567-89ab-cdef-0123-456789abcdef";
+  const jobName = "Local\\Hiranoa.Performance.01234567-89ab-cdef-0123-456789abcdef";
   assert.equal(
     queryPerformanceJobMembership(jobName, 4242, () => ({ status: 0, stdout: "true\r\n" })),
     true
@@ -31,7 +31,7 @@ test("validates Job membership query results", () => {
 });
 
 test("rejects fixture delivery without owned workspace", async () => {
-  const jobName = "Local\\FeatherMD.Performance.01234567-89ab-cdef-0123-456789abcdef";
+  const jobName = "Local\\Hiranoa.Performance.01234567-89ab-cdef-0123-456789abcdef";
   await assert.rejects(openPerformanceFixture({}, jobName, {}), /ownership/);
 });
 

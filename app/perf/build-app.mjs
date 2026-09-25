@@ -10,7 +10,7 @@ export const performanceTargetDir = path.join(appDir, "perf", "artifacts", "taur
 export const performanceExecutablePath = path.join(
   performanceTargetDir,
   "release",
-  process.platform === "win32" ? "feathermd.exe" : "feathermd"
+  process.platform === "win32" ? "hiranoa.exe" : "hiranoa"
 );
 
 const baseConfigPath = path.join(tauriDir, "tauri.conf.json");
@@ -36,7 +36,7 @@ export function validatePerformanceOverlay() {
   if (unexpectedKeys.length > 0) {
     throw new Error(`performance config overrides forbidden keys: ${unexpectedKeys.join(", ")}`);
   }
-  if (overlay.productName !== "FeatherMD Performance") {
+  if (overlay.productName !== "Hiranoa Performance") {
     throw new Error("performance config must use the dedicated product name");
   }
   if (
@@ -56,8 +56,8 @@ export function performanceBuildPlan(environment = process.env) {
     ...environment,
     CARGO_TARGET_DIR: performanceTargetDir,
   };
-  delete env.FEATHERMD_E2E_DISABLE_SINGLE_INSTANCE;
-  delete env.FEATHERMD_E2E_STATE_DIR;
+  delete env.HIRANOA_E2E_DISABLE_SINGLE_INSTANCE;
+  delete env.HIRANOA_E2E_STATE_DIR;
   return {
     command: process.execPath,
     args: [

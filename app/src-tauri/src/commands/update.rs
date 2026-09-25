@@ -7,8 +7,8 @@ use std::time::Instant;
 use tauri::State;
 
 const LATEST_RELEASE_API_URL: &str =
-    "https://api.github.com/repos/cocoabreak/feathermd/releases/latest";
-const RELEASES_URL: &str = "https://github.com/cocoabreak/feathermd/releases";
+    "https://api.github.com/repos/cocoabreak/hiranoa/releases/latest";
+const RELEASES_URL: &str = "https://github.com/cocoabreak/hiranoa/releases";
 const MAX_RESPONSE_BYTES: u64 = 64 * 1024;
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(5);
 const RESULT_CACHE_TTL: Duration = Duration::from_secs(30);
@@ -93,7 +93,7 @@ fn request_latest_release() -> Result<UpdateCheckResult, String> {
         .get(LATEST_RELEASE_API_URL)
         .header("Accept", "application/vnd.github+json")
         .header("X-GitHub-Api-Version", "2022-11-28")
-        .header("User-Agent", "FeatherMD")
+        .header("User-Agent", "Hiranoa")
         .call()
         .map_err(|error| match error {
             ureq::Error::StatusCode(404) => {

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// FeatherMD (Tauri v2 + WebView2) 用のCDPベースE2Eドライバー。
+// Hiranoa (Tauri v2 + WebView2) 用のCDPベースE2Eドライバー。
 // npm/npx追加インストールなし（Node組み込みのfetch/WebSocketのみ使用）。
 //
 // 使い方: node driver.mjs <command> [args...]
@@ -38,7 +38,7 @@ async function waitForCdp(timeoutMs) {
 }
 
 async function cmdLaunch() {
-  // WebView2は既定でアプリ識別子(com.cocoabreak.feathermd)ごとに固定の
+  // WebView2は既定でアプリ識別子(com.cocoabreak.hiranoa)ごとに固定の
   // user-data-dirを使う。同じidentifierの別インスタンス(リリースビルド等)が
   // 既に起動中だとプロファイルが排他ロックされ、このプロセスのWebViewが
   // 初期化できずCDPポートも永久に開かない。専用ディレクトリに退避して回避する。

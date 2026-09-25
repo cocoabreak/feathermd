@@ -8,7 +8,7 @@ tags:
 
 # セットアップガイド
 
-FeatherMDで`samples/link-demo`フォルダーを開き、`index.md`を選択します。
+Hiranoaで`samples/link-demo`フォルダーを開き、`index.md`を選択します。
 
 ## 基本操作
 

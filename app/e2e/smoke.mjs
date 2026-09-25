@@ -13,7 +13,7 @@ import { createFixtures } from "./fixtures.mjs";
 
 const appDir = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const artifactsDir = path.join(appDir, "e2e", "artifacts");
-const workDir = mkdtempSync(path.join(os.tmpdir(), "feathermd-e2e-"));
+const workDir = mkdtempSync(path.join(os.tmpdir(), "hiranoa-e2e-"));
 const fixtures = createFixtures(path.join(workDir, "fixtures"));
 const port = await findFreePort();
 const driver = new WebView2Driver({ port });

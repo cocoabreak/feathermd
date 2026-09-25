@@ -17,7 +17,7 @@ test("measures empty, plain, and rich in independent scenarios", async () => {
           {
             pid: 100,
             parentPid: 1,
-            name: "feathermd.exe",
+            name: "hiranoa.exe",
             workingSet64: 100,
             privateMemorySize64: 80,
           },

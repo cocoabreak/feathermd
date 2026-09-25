@@ -77,7 +77,7 @@ local-fonts/
 
 `app/src/lib/local-fonts/local-fonts.svelte.ts` が読込、`FontFace`登録、style適用、エラー、世代管理を一元化する。
 
-- family名はアプリ固定の内部名 `FeatherMD Local Body` / `FeatherMD Local Code` とする
+- family名はアプリ固定の内部名 `Hiranoa Local Body` / `Hiranoa Local Code` とする
 - `read_local_font` のraw responseを、releaseで返る数値配列も含めてBufferSourceへ正規化して `FontFace`へ渡す
 - `FontFace.load()`成功後だけ `document.fonts.add()`する
 - release CSPは `font-src 'self' data:` に限定し、`FontFace(ArrayBuffer)`の内部data URLだけを許可する
@@ -90,7 +90,7 @@ local-fonts/
 ```css
 .markdown-body {
   font-family:
-    "FeatherMD Local Body",
+    "Hiranoa Local Body",
     -apple-system,
     BlinkMacSystemFont,
     "Segoe UI",
@@ -99,7 +99,7 @@ local-fonts/
 
 .markdown-body :where(pre, code, kbd, samp) {
   font-family:
-    "FeatherMD Local Code", ui-monospace, SFMono-Regular, Menlo, Consolas,
+    "Hiranoa Local Code", ui-monospace, SFMono-Regular, Menlo, Consolas,
     monospace;
 }
 ```

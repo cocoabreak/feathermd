@@ -22,7 +22,7 @@ import { createPerformanceWorkspace } from "./run-workspace.mjs";
 import { preparePerformanceLaunch } from "./runner.mjs";
 
 function workspaceFixture() {
-  const root = mkdtempSync(path.join(os.tmpdir(), "feathermd-fixture-copy-test-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "hiranoa-fixture-copy-test-"));
   const roaming = path.join(root, "roaming");
   const temp = path.join(root, "temp");
   mkdirSync(roaming);
@@ -31,7 +31,7 @@ function workspaceFixture() {
     {
       port: 41_238,
       runDir: path.join(temp, "ignored"),
-      executablePath: "C:\\build\\feathermd.exe",
+      executablePath: "C:\\build\\hiranoa.exe",
       environment: {},
       platform: "win32",
     },

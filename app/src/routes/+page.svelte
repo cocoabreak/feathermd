@@ -354,7 +354,7 @@
             currentVersion: "0.1.0",
             latestVersion: "9.9.9",
             updateAvailable: true,
-            releaseUrl: "https://example.invalid/feathermd/releases/9.9.9",
+            releaseUrl: "https://example.invalid/hiranoa/releases/9.9.9",
           });
         },
         resetSession: async () => {

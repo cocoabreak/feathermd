@@ -46,4 +46,4 @@
   - [x] 他のタブ操作（切り替え・`Ctrl+Tab`等の`tab.next`/`tab.prev`・`Ctrl+数字`の`jumpTo`）に影響がない
   - [x] `npm run format` / `npm run lint` / `npm run check` / `npm run test` がエラーなく通る
 - **対応US**: 全US
-- **備考**: `/run-feathermd`スキル（CDP経由のドライバー）で実際にTauriウィンドウを起動し、2ファイルをタブで開いてピン留め→`Ctrl+W`阻止→解除→`Ctrl+W`でクローズ、までスクリーンショット付きで実測確認済み
+- **備考**: `/run-hiranoa`スキル（CDP経由のドライバー）で実際にTauriウィンドウを起動し、2ファイルをタブで開いてピン留め→`Ctrl+W`阻止→解除→`Ctrl+W`でクローズ、までスクリーンショット付きで実測確認済み

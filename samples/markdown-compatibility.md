@@ -1,7 +1,7 @@
 # Markdown compatibility test
 
 This file checks CommonMark, GitHub Flavored Markdown (GFM), and selected
-FeatherMD extensions. Each section should remain visually distinguishable.
+Hiranoa extensions. Each section should remain visually distinguishable.
 
 ## 1. Block structure
 
@@ -200,7 +200,7 @@ Adjacent list marker changes:
 1. Ordered item
 - Unordered again
 
-## 7. FeatherMD extensions and additional dialects
+## 7. Hiranoa extensions and additional dialects
 
 Emoji shortcode: :trophy: :smile: :+1:.
 
@@ -210,7 +210,7 @@ Inline math: $E = mc^2$.
 
 ```mermaid
 flowchart LR
-  A[Markdown] --> B[FeatherMD]
+  A[Markdown] --> B[Hiranoa]
 ```
 
 Footnote reference (not part of CommonMark or core GFM): sentence with a note.[^1]

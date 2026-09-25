@@ -11,7 +11,7 @@ import os from "node:os";
 import path from "node:path";
 import { assertPreparedPerformancePlan } from "./runner.mjs";
 
-const RUN_PREFIX = "feathermd-performance-run-";
+const RUN_PREFIX = "hiranoa-performance-run-";
 const WORKSPACE_OWNERSHIP = Symbol("performance workspace ownership");
 
 function normalize(directory) {

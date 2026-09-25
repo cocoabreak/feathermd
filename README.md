@@ -1,26 +1,22 @@
-# FeatherMD
+# Hiranoa
 
 <p align="center">
-  <img src="app/src-tauri/icons/icon-source.png" alt="FeatherMD logo" width="180">
+  <img src="docs/images/hiranoa-logo-rounded.svg" alt="Hiranoa logo" width="180">
 </p>
 
 [日本語](README.ja.md)
 
-FeatherMD is a fast, read-only viewer for local Markdown files and Markdown documents stored in ZIP archives. It combines a Tauri v2 and Rust backend with a Svelte 5 interface, providing rich rendering without turning the viewer into an editor.
+Hiranoa is a fast, read-only viewer for local Markdown files and Markdown documents stored in ZIP archives. It combines a Tauri v2 and Rust backend with a Svelte 5 interface, providing rich rendering without turning the viewer into an editor.
 
-> FeatherMD currently prioritizes Windows. Linux support is a secondary goal, and macOS support is lower priority.
+> Hiranoa currently prioritizes Windows. Linux support is a secondary goal, and macOS support is lower priority.
 
 ## See it in action
 
 <p align="center">
-  <img src="docs/images/feathermd-overview.png" alt="FeatherMD showing the link inspector and a local link preview" width="1000">
+  <img src="docs/images/hiranoa-link-demo.gif" alt="Hiranoa previews a linked document, shows the local link graph, and opens a document by clicking a graph node" width="1000">
 </p>
 
-<p align="center"><em>Browse local Markdown links without losing your place.</em></p>
-
-<p align="center">
-  <img src="docs/images/link-preview-demo.gif" alt="Hover previews in a document and the local link graph" width="900">
-</p>
+<p align="center"><em>Preview linked documents, explore the local link graph, and click a node to jump to its document.</em></p>
 
 ## Highlights
 
@@ -38,7 +34,7 @@ FeatherMD is a fast, read-only viewer for local Markdown files and Markdown docu
 
 ## Security model
 
-FeatherMD treats Markdown as potentially untrusted input. The guarantees below describe release builds.
+Hiranoa treats Markdown as potentially untrusted input. The guarantees below describe release builds.
 
 - File access is validated by the Rust backend against canonicalized allowed roots.
 - Drive roots, Windows system directories, and the user-profile root cannot be trusted as broad Explorer roots.
@@ -46,7 +42,7 @@ FeatherMD treats Markdown as potentially untrusted input. The guarantees below d
 - Only the most recently approved Explorer root is persisted as trusted; other recent folders require confirmation again.
 - Rendered HTML is sanitized, Mermaid uses strict security settings, and the app runs with a restrictive Content Security Policy.
 - Local Markdown, images, custom CSS, searches, and directory traversal have type, size, or entry-count limits where applicable.
-- At startup, FeatherMD checks GitHub Releases for a newer version by default. This can be disabled in Settings. The update request does not include document contents or local file paths.
+- At startup, Hiranoa checks GitHub Releases for a newer version by default. This can be disabled in Settings. The update request does not include document contents or local file paths.
 - External HTTPS images follow the selected privacy policy. Under the default policy, they are not requested until the user approves them for the current document.
 
 This model limits what a malicious document can access, but it does not make an untrusted file inherently safe. Review unexpected confirmation prompts before approving them.
@@ -70,19 +66,25 @@ The title-bar menu shows the native application menu and its available commands.
 
 ## Installation
 
-Release packages are published on [GitHub Releases](https://github.com/cocoabreak/feathermd/releases).
+### Moving from FeatherMD
 
-Release binaries are not code-signed. Windows Defender SmartScreen may therefore show an "unrecognized app" warning, and macOS may block an unnotarized application until the user explicitly approves it. Download FeatherMD only from the official Releases page above and confirm that you trust the source before bypassing an operating-system warning.
+Hiranoa 0.3.0 is the renamed successor to FeatherMD and installs as a separate application. Settings, history, tabs, local fonts, and trusted folders are not imported. Existing FeatherMD data is not automatically deleted.
 
-| Platform                    | Support level | Distribution notes                                                                                                         |
-| --------------------------- | ------------- | -------------------------------------------------------------------------------------------------------------------------- |
-| Windows x64                 | Primary       | MSI and NSIS (`.exe`) installers plus `FeatherMD_<version>_x64-portable.zip`. Microsoft Edge WebView2 Runtime is required. |
-| Linux x64                   | Best effort   | CI-built packages are published with the release; desktop integration may vary by distribution.                            |
-| macOS (Apple Silicon/Intel) | Experimental  | A universal CI build is published, but macOS has the lowest support priority and the application is not notarized.         |
+Before uninstalling FeatherMD, turn off its Windows context-menu option in Settings. Then install Hiranoa, select your folders again, and enable its context-menu option if needed. Reassign any file associations or shortcuts that still point to FeatherMD. Older FeatherMD versions may stop checking for updates after the repository rename; download Hiranoa manually from the Releases link below.
+
+Release packages are published on [GitHub Releases](https://github.com/cocoabreak/hiranoa/releases).
+
+Release binaries are not code-signed. Windows Defender SmartScreen may therefore show an "unrecognized app" warning, and macOS may block an unnotarized application until the user explicitly approves it. Download Hiranoa only from the official Releases page above and confirm that you trust the source before bypassing an operating-system warning.
+
+| Platform                    | Support level | Distribution notes                                                                                                       |
+| --------------------------- | ------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| Windows x64                 | Primary       | MSI and NSIS (`.exe`) installers plus `Hiranoa_<version>_x64-portable.zip`. Microsoft Edge WebView2 Runtime is required. |
+| Linux x64                   | Best effort   | CI-built packages are published with the release; desktop integration may vary by distribution.                          |
+| macOS (Apple Silicon/Intel) | Experimental  | A universal CI build is published, but macOS has the lowest support priority and the application is not notarized.       |
 
 ### Build prerequisites
 
-These are required only when building FeatherMD from source:
+These are required only when building Hiranoa from source:
 
 - Node.js 24 LTS
 - Rust and Cargo
@@ -92,8 +94,8 @@ These are required only when building FeatherMD from source:
 ### Build and run from source
 
 ```bash
-git clone https://github.com/cocoabreak/feathermd.git
-cd feathermd/app
+git clone https://github.com/cocoabreak/hiranoa.git
+cd hiranoa/app
 npm ci
 npm run tauri dev
 ```
@@ -129,10 +131,6 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines. The feature 
 
 Release history is available in the [changelog](CHANGELOG.md).
 
-## Disclaimer
-
-FeatherMD is an independent open-source project. It is not affiliated with, sponsored by, or endorsed by any other product or project named "Feather".
-
 ## License
 
-FeatherMD is licensed under the [MIT License](LICENSE).
+Hiranoa is licensed under the [MIT License](LICENSE).
