@@ -13,15 +13,15 @@ import {
 test("requires the dedicated identifier in the built executable", () => {
   assert.doesNotThrow(() =>
     assertExecutableContainsIdentifier(
-      Buffer.from("prefix com.cocoabreak.feathermd.performance suffix"),
-      "com.cocoabreak.feathermd.performance"
+      Buffer.from("prefix com.cocoabreak.hiranoa.performance suffix"),
+      "com.cocoabreak.hiranoa.performance"
     )
   );
   assert.throws(
     () =>
       assertExecutableContainsIdentifier(
-        Buffer.from("com.cocoabreak.feathermd"),
-        "com.cocoabreak.feathermd.performance"
+        Buffer.from("com.cocoabreak.hiranoa"),
+        "com.cocoabreak.hiranoa.performance"
       ),
     /does not contain/
   );
@@ -38,12 +38,12 @@ test("performance overlay changes only the app identity", () => {
 test("performance build uses an isolated release target and production single-instance", () => {
   const plan = performanceBuildPlan({
     npm_execpath: "npm-cli.js",
-    FEATHERMD_E2E_DISABLE_SINGLE_INSTANCE: "1",
-    FEATHERMD_E2E_STATE_DIR: "test-state",
+    HIRANOA_E2E_DISABLE_SINGLE_INSTANCE: "1",
+    HIRANOA_E2E_STATE_DIR: "test-state",
   });
   assert.equal(plan.options.env.CARGO_TARGET_DIR, performanceTargetDir);
-  assert.equal(plan.options.env.FEATHERMD_E2E_DISABLE_SINGLE_INSTANCE, undefined);
-  assert.equal(plan.options.env.FEATHERMD_E2E_STATE_DIR, undefined);
+  assert.equal(plan.options.env.HIRANOA_E2E_DISABLE_SINGLE_INSTANCE, undefined);
+  assert.equal(plan.options.env.HIRANOA_E2E_STATE_DIR, undefined);
   assert.deepEqual(plan.args.slice(-3), ["--config", performanceConfigPath, "--no-bundle"]);
   assert.equal(plan.args.includes("--debug"), false);
 });

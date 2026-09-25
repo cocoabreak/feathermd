@@ -28,7 +28,7 @@ tags:
 
 ## 索引対象外の例
 
-- 外部リンク: [FeatherMD on GitHub](https://github.com/cocoabreak/feathermd)
+- 外部リンク: [Hiranoa on GitHub](https://github.com/cocoabreak/hiranoa)
 - 画像: ![存在しないサンプル画像](assets/missing.png)
 - 同一文書内リンク: [確認ポイント](#確認ポイント)
 - インラインコード: `[[not-a-link]]` と `[not a link](missing.md)`

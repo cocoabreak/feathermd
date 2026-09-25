@@ -20,7 +20,7 @@ pub fn run() {
     // single-instanceは登録順に処理されるため、他のプラグインより先に登録する必要がある
     #[cfg(desktop)]
     let builder = if cfg!(debug_assertions)
-        && std::env::var_os("FEATHERMD_E2E_DISABLE_SINGLE_INSTANCE").is_some()
+        && std::env::var_os("HIRANOA_E2E_DISABLE_SINGLE_INSTANCE").is_some()
     {
         builder
     } else {

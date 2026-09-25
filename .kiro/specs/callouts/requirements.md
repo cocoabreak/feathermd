@@ -2,11 +2,11 @@
 
 ## 背景・動機
 
-FeatherMDはGitHub Alertsの基本5種をHTMLへ変換できるが、専用スタイルがなく、Obsidian Calloutsの代表種別や折りたたみ記法には対応していない。通常の引用と視覚・意味の両面で区別しつつ、既存のMarkdown処理、サニタイズ、テーマ、出力機能と共存させる。
+HiranoaはGitHub Alertsの基本5種をHTMLへ変換できるが、専用スタイルがなく、Obsidian Calloutsの代表種別や折りたたみ記法には対応していない。通常の引用と視覚・意味の両面で区別しつつ、既存のMarkdown処理、サニタイズ、テーマ、出力機能と共存させる。
 
 関連:
 
-- [Issue #23: GitHub Alerts／Obsidian Callouts形式の表示に対応する](https://github.com/cocoabreak/feathermd/issues/23)
+- [Issue #23: GitHub Alerts／Obsidian Callouts形式の表示に対応する](https://github.com/cocoabreak/hiranoa/issues/23)
 - [レンダラープラグイン要求](../renderer-plugins/requirements.md)
 - [エクスポート要求](../export-document/requirements.md)
 - [カスタムCSS要求](../custom-css/requirements.md)
@@ -63,7 +63,7 @@ So that 補足内にも構造化された情報を置ける
 
 ### US-004: 表示・出力・カスタマイズとの共存
 
-As a FeatherMDユーザー
+As a Hiranoaユーザー
 I want to Calloutを通常表示と出力で一貫して利用したい
 So that 閲覧環境を変えても情報を失わない
 

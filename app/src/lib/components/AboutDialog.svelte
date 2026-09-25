@@ -10,7 +10,7 @@
 
   let { onclose }: { onclose: () => void } = $props();
 
-  const GITHUB_URL = "https://github.com/cocoabreak/feathermd";
+  const GITHUB_URL = "https://github.com/cocoabreak/hiranoa";
   const MIT_LICENSE_TEXT = `MIT License
 
 Copyright (c) 2026 Hirofumi Akiyama
@@ -72,7 +72,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
       <div class="flex items-center gap-4">
         <img src="/favicon.png" alt="" class="h-16 w-16 shrink-0" />
         <div class="min-w-0">
-          <h3 class="text-2xl font-semibold tracking-tight">FeatherMD</h3>
+          <h3 class="text-2xl font-semibold tracking-tight">Hiranoa</h3>
           <p class="text-sm text-muted-foreground">
             {m.about.version(aboutBuildInfo.appVersion)}
           </p>

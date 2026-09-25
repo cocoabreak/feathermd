@@ -23,8 +23,8 @@ export interface LocalFontStatus {
 const STYLE_ID = "local-font-style";
 const CUSTOM_CSS_STYLE_ID = "custom-user-css";
 const FAMILY_NAMES: Record<LocalFontSlot, string> = {
-  body: "FeatherMD Local Body",
-  code: "FeatherMD Local Code",
+  body: "Hiranoa Local Body",
+  code: "Hiranoa Local Code",
 };
 const EMPTY_SLOT_STATUS = (): LocalFontSlotStatus => ({ info: null, error: null });
 

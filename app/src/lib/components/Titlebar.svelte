@@ -57,7 +57,7 @@
     >
       <Menu size={16} />
     </button>
-    <span data-tauri-drag-region class="truncate font-medium text-foreground">FeatherMD</span>
+    <span data-tauri-drag-region class="truncate font-medium text-foreground">Hiranoa</span>
   </div>
   <div class="flex h-full shrink-0">
     <button

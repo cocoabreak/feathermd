@@ -26,7 +26,7 @@ const COMPLETION_EXPRESSIONS = {
   })()`,
 };
 
-const REPLACEMENT_STATE = "__feathermdPerformanceFixtureReplacement";
+const REPLACEMENT_STATE = "__hiranoaPerformanceFixtureReplacement";
 
 export function fixtureCompletionExpression(fixture) {
   assertValidatedPerformanceFixture(fixture);

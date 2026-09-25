@@ -84,4 +84,4 @@ markdown-itのfenceルールは**同期関数**のため、非同期・DOM必須
 
 - `plugins.test.ts` が契約（default export・必須フィールド・SemVer形式のversion・name一意性・
   displayName/descriptionの全言語網羅・engine指定時の依存関係）を自動検証する
-- 実機確認は `npm run tauri dev` または `.claude/skills/run-feathermd`（CDP駆動）を使う
+- 実機確認は `npm run tauri dev` または `.claude/skills/run-hiranoa`（CDP駆動）を使う

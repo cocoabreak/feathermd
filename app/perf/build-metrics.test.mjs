@@ -12,7 +12,7 @@ import {
 } from "./build-metrics.mjs";
 
 function createBuild(manifest) {
-  const root = mkdtempSync(path.join(os.tmpdir(), "feathermd-perf-test-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "hiranoa-perf-test-"));
   mkdirSync(path.join(root, "assets"), { recursive: true });
   mkdirSync(path.join(root, ".vite"), { recursive: true });
   writeFileSync(

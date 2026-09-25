@@ -20,7 +20,7 @@ import {
 } from "./run-workspace.mjs";
 
 function fixture() {
-  const root = mkdtempSync(path.join(os.tmpdir(), "feathermd-workspace-test-"));
+  const root = mkdtempSync(path.join(os.tmpdir(), "hiranoa-workspace-test-"));
   const roaming = path.join(root, "roaming");
   const temp = path.join(root, "temp");
   mkdirSync(roaming);
@@ -29,7 +29,7 @@ function fixture() {
     {
       port: 41_237,
       runDir: path.join(temp, "ignored"),
-      executablePath: "C:\\build\\feathermd.exe",
+      executablePath: "C:\\build\\hiranoa.exe",
       environment: {},
       platform: "win32",
     },
@@ -43,7 +43,7 @@ function fixture() {
 }
 
 test("rebuilds performance AppData from the canonical Roaming path", () => {
-  const performanceIdentifier = "com.cocoabreak.FeatherMD.performance";
+  const performanceIdentifier = "com.cocoabreak.Hiranoa.performance";
   const plannedRoamingRoot = "C:\\Users\\RUNNER~1\\AppData\\Roaming";
   const canonicalRoamingRoot = "C:\\Users\\runneradmin\\AppData\\Roaming";
   const plan = {
@@ -70,7 +70,7 @@ test("creates and removes owned profile and performance AppData", () => {
     const workspace = createPerformanceWorkspace(plan, { tempRoot: temp });
     assert.equal(existsSync(workspace.profileDir), true);
     assert.equal(existsSync(workspace.performanceAppDataDir), true);
-    assert.match(path.basename(workspace.runDir), /^feathermd-performance-run-/);
+    assert.match(path.basename(workspace.runDir), /^hiranoa-performance-run-/);
     cleanupPerformanceWorkspace(workspace);
     assert.equal(existsSync(workspace.runDir), false);
     assert.equal(existsSync(workspace.performanceAppDataDir), false);

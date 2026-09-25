@@ -1,9 +1,9 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  assertNoForeignFeatherMdProcesses,
+  assertNoForeignHiranoaProcesses,
   calculateStartupTimings,
-  createFeatherMdBackgroundGuard,
+  createHiranoaBackgroundGuard,
   finishPerformanceLaunch,
   isProductionTauriUrl,
   measurePerformanceMemoryScenario,
@@ -42,18 +42,18 @@ test("rejects a normal app race without exposing any process termination operati
     pid: 4242,
     parentPid: 100,
     creationTime: "2026-08-01T01:02:03.0000000Z",
-    executablePath: "c:\\build\\perf\\feathermd.exe",
+    executablePath: "c:\\build\\perf\\hiranoa.exe",
   };
-  assert.doesNotThrow(() => assertNoForeignFeatherMdProcesses(owned, [{ ...owned }]));
+  assert.doesNotThrow(() => assertNoForeignHiranoaProcesses(owned, [{ ...owned }]));
   assert.throws(
     () =>
-      assertNoForeignFeatherMdProcesses(owned, [
+      assertNoForeignHiranoaProcesses(owned, [
         owned,
         {
           ...owned,
           pid: 5151,
           creationTime: "2026-08-01T01:02:04.0000000Z",
-          executablePath: "c:\\program files\\feathermd\\feathermd.exe",
+          executablePath: "c:\\program files\\hiranoa\\hiranoa.exe",
         },
       ]),
     /started after performance preflight/
@@ -65,10 +65,10 @@ test("rejects a late normal app race at a completion boundary", () => {
     pid: 4242,
     parentPid: 100,
     creationTime: "2026-08-01T01:02:03.0000000Z",
-    executablePath: "c:\\build\\perf\\feathermd.exe",
+    executablePath: "c:\\build\\perf\\hiranoa.exe",
   };
   let checks = 0;
-  const guard = createFeatherMdBackgroundGuard(owned, () => {
+  const guard = createHiranoaBackgroundGuard(owned, () => {
     checks += 1;
     return checks < 3 ? [owned] : [owned, { ...owned, pid: 5151 }];
   });
@@ -265,7 +265,7 @@ test("measures fixture memory after opening it through the owned CLI path", asyn
   const appIdentity = {
     pid: 100,
     creationTime: "2026-08-01T00:00:00.000Z",
-    executablePath: "c:\\build\\feathermd.exe",
+    executablePath: "c:\\build\\hiranoa.exe",
   };
   const listenerProcess = {
     pid: 200,

@@ -9,13 +9,13 @@
 Windows公式の静的verb登録に従い、以下の2か所を現在ユーザーの`HKCU\\Software\\Classes`配下へ作成する。
 
 ```text
-SystemFileAssociations\\.md\\shell\\FeatherMD.Open
-SystemFileAssociations\\.markdown\\shell\\FeatherMD.Open
+SystemFileAssociations\\.md\\shell\\Hiranoa.Open
+SystemFileAssociations\\.markdown\\shell\\Hiranoa.Open
 ```
 
 各verbは固定された以下の値だけを持つ。
 
-- 既定値: `FeatherMDで開く`
+- 既定値: `Hiranoaで開く`
 - `Icon`: `"<current_exe>",0`
 - `MultiSelectModel`: `Document`
 - `command`の既定値: `"<current_exe>" "%1"`
@@ -31,7 +31,7 @@ set_shell_integration_enabled(enabled: bool) -> ShellIntegrationStatus
 
 任意のキー、値、実行ファイルをWebViewから指定できる汎用APIにはしない。実行ファイルは`std::env::current_exe()`から取得する。状態は両拡張子のcommand値が現在の期待値と完全一致するときだけ`registered = true`とする。
 
-登録途中で失敗した場合は両方のFeatherMD verbを削除してロールバックする。解除はFeatherMD verbサブツリーだけを削除し、親の拡張子・shell・他動詞へ触れない。最後に`SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, ...)`を呼ぶ。
+登録途中で失敗した場合は両方のHiranoa verbを削除してロールバックする。解除はHiranoa verbサブツリーだけを削除し、親の拡張子・shell・他動詞へ触れない。最後に`SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, ...)`を呼ぶ。
 
 ## 2. 設定UI
 

@@ -84,7 +84,7 @@ export const ja = {
     toggleToc: "目次の表示を切り替える",
     toggleSource: "レンダー / ソース表示を切り替える",
     openSettings: "設定を開く",
-    about: "FeatherMDについて",
+    about: "Hiranoaについて",
     findInPage: "ページ内検索",
     searchInExplorer: "エクスプローラー内を検索",
     zoomIn: "表示を拡大",
@@ -177,12 +177,11 @@ export const ja = {
     dialogTitle: "画像の拡大表示",
   },
   about: {
-    title: "FeatherMDについて",
+    title: "Hiranoaについて",
     version: (version: string) => `バージョン ${version}`,
     description: "ローカルMarkdownファイルのための軽量な読み取り専用ビューワーです。",
     copyright: "Copyright © 2026 Hirofumi Akiyama",
-    disclaimer:
-      "FeatherMDは独立したオープンソースプロジェクトです。他の「Feather」という名称の製品・プロジェクトとの提携、支援、承認関係はありません。",
+    disclaimer: "Hiranoaは独立したオープンソースのMarkdownビューワーです。",
     github: "GitHubリポジトリ",
     pluginsAndComponents: "プラグインとコンポーネント",
     installedPlugins: "内蔵プラグイン",
@@ -192,7 +191,7 @@ export const ja = {
     enabled: "有効",
     disabled: "無効",
     licenses: "ライセンス",
-    applicationLicense: "FeatherMD",
+    applicationLicense: "Hiranoa",
     thirdPartyLicenses: "主要コンポーネント",
   },
   accessibility: {
@@ -309,7 +308,7 @@ export const ja = {
     layout: "レイアウト",
     explorer: "エクスプローラー",
     windowsIntegration: "Windows連携",
-    windowsContextMenu: "右クリックに「FeatherMDで開く」を追加",
+    windowsContextMenu: "右クリックに「Hiranoaで開く」を追加",
     windowsContextMenuDescription:
       "Markdownファイル（.md / .markdown）の既定アプリは変更しません。",
     windowsContextMenuLegacyNote:

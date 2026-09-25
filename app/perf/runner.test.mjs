@@ -8,8 +8,8 @@ import {
 
 const environment = {
   APPDATA: "D:\\untrusted-env-appdata",
-  FEATHERMD_E2E_DISABLE_SINGLE_INSTANCE: "1",
-  FEATHERMD_E2E_STATE_DIR: "C:\\temp\\e2e-state",
+  HIRANOA_E2E_DISABLE_SINGLE_INSTANCE: "1",
+  HIRANOA_E2E_STATE_DIR: "C:\\temp\\e2e-state",
   WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS: "--remote-debugging-address=0.0.0.0",
   WEBVIEW2_USER_DATA_FOLDER: "C:\\normal-profile",
 };
@@ -17,8 +17,8 @@ const roamingAppDataDir = "C:\\Users\\alice\\AppData\\Roaming";
 
 test("resolves identifier AppData as a direct child of roaming AppData", () => {
   assert.equal(
-    resolveIdentifierAppDataDir("com.cocoabreak.feathermd.performance", roamingAppDataDir),
-    "C:\\Users\\alice\\AppData\\Roaming\\com.cocoabreak.feathermd.performance"
+    resolveIdentifierAppDataDir("com.cocoabreak.hiranoa.performance", roamingAppDataDir),
+    "C:\\Users\\alice\\AppData\\Roaming\\com.cocoabreak.hiranoa.performance"
   );
   for (const identifier of ["../escape", "com.example..escape", "com/example/app"]) {
     assert.throws(() => resolveIdentifierAppDataDir(identifier, roamingAppDataDir), /identifier/);
@@ -28,14 +28,14 @@ test("resolves identifier AppData as a direct child of roaming AppData", () => {
 test("creates an argument-free isolated loopback launch plan", () => {
   const plan = createPerformanceLaunchPlan({
     port: 41_237,
-    runDir: "C:\\temp\\feathermd-performance-run",
-    executablePath: "C:\\build\\feathermd.exe",
+    runDir: "C:\\temp\\hiranoa-performance-run",
+    executablePath: "C:\\build\\hiranoa.exe",
     environment,
     platform: "win32",
     roamingAppDataDir,
   });
 
-  assert.equal(plan.command, "C:\\build\\feathermd.exe");
+  assert.equal(plan.command, "C:\\build\\hiranoa.exe");
   assert.deepEqual(plan.args, []);
   assert.equal(plan.cdpOrigin, "http://127.0.0.1:41237");
   assert.equal(
@@ -44,10 +44,10 @@ test("creates an argument-free isolated loopback launch plan", () => {
   );
   assert.equal(
     plan.options.env.WEBVIEW2_USER_DATA_FOLDER,
-    "C:\\temp\\feathermd-performance-run\\webview-profile"
+    "C:\\temp\\hiranoa-performance-run\\webview-profile"
   );
-  assert.equal(plan.options.env.FEATHERMD_E2E_DISABLE_SINGLE_INSTANCE, undefined);
-  assert.equal(plan.options.env.FEATHERMD_E2E_STATE_DIR, undefined);
+  assert.equal(plan.options.env.HIRANOA_E2E_DISABLE_SINGLE_INSTANCE, undefined);
+  assert.equal(plan.options.env.HIRANOA_E2E_STATE_DIR, undefined);
   assert.equal(plan.options.env.APPDATA, roamingAppDataDir);
   assert.notEqual(plan.normalAppDataDir, plan.performanceAppDataDir);
   assert.equal(plan.options.windowsHide, true);
@@ -55,7 +55,7 @@ test("creates an argument-free isolated loopback launch plan", () => {
 
 test("rejects unsafe launch roots and CDP ports", () => {
   const base = {
-    executablePath: "C:\\build\\feathermd.exe",
+    executablePath: "C:\\build\\hiranoa.exe",
     environment,
     platform: "win32",
     roamingAppDataDir,
@@ -73,9 +73,9 @@ test("rejects unsafe launch roots and CDP ports", () => {
       createPerformanceLaunchPlan({
         ...base,
         port: 9_222,
-        runDir: "C:\\Users\\alice\\AppData\\Roaming\\com.cocoabreak.feathermd.performance",
+        runDir: "C:\\Users\\alice\\AppData\\Roaming\\com.cocoabreak.hiranoa.performance",
       }),
-    /outside FeatherMD AppData/
+    /outside Hiranoa AppData/
   );
   assert.doesNotThrow(() =>
     createPerformanceLaunchPlan({
@@ -86,11 +86,11 @@ test("rejects unsafe launch roots and CDP ports", () => {
   );
 });
 
-test("refuses launch when any FeatherMD instance already exists", () => {
+test("refuses launch when any Hiranoa instance already exists", () => {
   const options = {
     port: 41_237,
-    runDir: "C:\\temp\\feathermd-performance-run",
-    executablePath: "C:\\build\\feathermd.exe",
+    runDir: "C:\\temp\\hiranoa-performance-run",
+    executablePath: "C:\\build\\hiranoa.exe",
     environment,
     platform: "win32",
   };
@@ -111,7 +111,7 @@ test("refuses launch when any FeatherMD instance already exists", () => {
     () =>
       preparePerformanceLaunch(options, {
         ...dependencies,
-        mutexExists: (name) => name === "com.cocoabreak.feathermd.performance-sim",
+        mutexExists: (name) => name === "com.cocoabreak.hiranoa.performance-sim",
       }),
     /already running/
   );

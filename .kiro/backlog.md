@@ -38,12 +38,12 @@ spec化する前のアイデア、優先度を下げた検討事項を記録す�
 ### README免責事項
 
 - **状態**: 対応済み
-- **概要**: FeatherMDが「Feather」の名称を持つ他の製品・プロジェクトと提携、資金提供、承認関係にない独立したオープンソースプロジェクトであることを英語・日本語READMEへ明記する。
+- **概要**: Hiranoaが「Feather」の名称を持つ他の製品・プロジェクトと提携、資金提供、承認関係にない独立したオープンソースプロジェクトであることを英語・日本語READMEへ明記する。
 
-### FeatherMDブランド統一
+### Hiranoaブランド統一
 
 - **状態**: 対応済み（`.kiro/specs/brand-normalization/`）
-- **概要**: 公開リポジトリを`cocoabreak/feathermd`とし、コード、メタデータ、README、spec、backlog、開発ツール内の製品名と固定URLをFeatherMDへ統一する。
+- **概要**: 公開リポジトリを`cocoabreak/hiranoa`とし、コード、メタデータ、README、spec、backlog、開発ツール内の製品名と固定URLをHiranoaへ統一する。
 
 ### 設定画面のカテゴリ再構成
 
@@ -79,7 +79,7 @@ spec化する前のアイデア、優先度を下げた検討事項を記録す�
 ### 1. Windowsシェル統合とCLI入力
 
 - **状態**: 実装済み（`.kiro/specs/windows-shell-integration/`）
-- **概要**: `.md` / `.markdown`の右クリックへ「FeatherMDで開く」をユーザー操作で登録・解除する。既定アプリは変更しない。CLI引数とsingle-instance連携を正式機能として完成させる。
+- **概要**: `.md` / `.markdown`の右クリックへ「Hiranoaで開く」をユーザー操作で登録・解除する。既定アプリは変更しない。CLI引数とsingle-instance連携を正式機能として完成させる。
 
 ### 2. Markdownソース確認モード
 
@@ -169,7 +169,7 @@ spec化する前のアイデア、優先度を下げた検討事項を記録す�
 
 - **概要**: renderer-plugins spec（2026-07-10）で旧 `markdown/types.ts` にあった `external-process` / `cloud-api` のスタブ型を削除した際の構想引き継ぎ。現行のプラグインインターフェース（`plugins/types.ts`）は「fenceで同期プレースホルダー → postRenderで非同期の実レンダリング」の二段構えのため、postRender内でTauriコマンド（外部プロセス起動）やHTTP（Kroki等のクラウドAPI）を呼べば追加の型なしで実現できる。
 - **留意点**: ローカルファイル内容を外部へ送る形になるため、実装時は明示的オプトイン（デフォルトOFF）とsecurity-hardening specとの整合が必要。外部プロセス型はコマンドインジェクション対策（許可コマンドの固定化）を要検討。
-- **関連Issue**: [#4 PlantUMLを例に追加レンダラーの分離配布方式を調査する](https://github.com/cocoabreak/feathermd/issues/4)
+- **関連Issue**: [#4 PlantUMLを例に追加レンダラーの分離配布方式を調査する](https://github.com/cocoabreak/hiranoa/issues/4)
 
 ---
 

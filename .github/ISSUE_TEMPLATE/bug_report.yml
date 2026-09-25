@@ -1,5 +1,5 @@
 name: Bug report / バグ報告
-description: Report a reproducible problem in FeatherMD / FeatherMDで再現する問題を報告する
+description: Report a reproducible problem in Hiranoa / Hiranoaで再現する問題を報告する
 title: "[Bug]: "
 labels:
   - bug
@@ -10,13 +10,13 @@ body:
         Thank you for reporting a problem. English and Japanese are both welcome.
         問題のご報告ありがとうございます。日本語・英語のどちらでも投稿できます。
 
-        Do not report suspected security vulnerabilities here. Use [private vulnerability reporting](https://github.com/cocoabreak/feathermd/security/advisories/new).
-        セキュリティ脆弱性の疑いがある場合は、公開Issueではなく[非公開の脆弱性報告](https://github.com/cocoabreak/feathermd/security/advisories/new)を利用してください。
+        Do not report suspected security vulnerabilities here. Use [private vulnerability reporting](https://github.com/cocoabreak/hiranoa/security/advisories/new).
+        セキュリティ脆弱性の疑いがある場合は、公開Issueではなく[非公開の脆弱性報告](https://github.com/cocoabreak/hiranoa/security/advisories/new)を利用してください。
 
   - type: input
     id: version
     attributes:
-      label: FeatherMD version / FeatherMDのバージョン
+      label: Hiranoa version / Hiranoaのバージョン
       placeholder: e.g. 0.2.2 or commit SHA
     validations:
       required: true

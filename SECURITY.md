@@ -3,7 +3,7 @@
 ## Supported versions
 
 Security fixes are provided on a best-effort basis for the latest published
-version of FeatherMD. Older releases and development builds may not receive
+version of Hiranoa. Older releases and development builds may not receive
 security updates.
 
 ## Reporting a vulnerability
@@ -13,13 +13,13 @@ discussions, or pull requests.
 
 Use GitHub's private vulnerability reporting to submit a report:
 
-[Report a vulnerability privately](https://github.com/cocoabreak/feathermd/security/advisories/new)
+[Report a vulnerability privately](https://github.com/cocoabreak/hiranoa/security/advisories/new)
 
 Reports may be submitted in English or Japanese.
 
 Include the following information when possible:
 
-- The affected FeatherMD version or commit
+- The affected Hiranoa version or commit
 - Operating system and relevant environment details
 - A description of the vulnerability and its potential impact
 - Steps or a minimal example that reproduce the issue

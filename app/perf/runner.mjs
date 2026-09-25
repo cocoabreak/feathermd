@@ -83,13 +83,13 @@ export function createPerformanceLaunchPlan({
   const profileDir = path.win32.join(normalizedRunDir, "webview-profile");
   for (const protectedDir of [normalAppDataDir, performanceAppDataDir]) {
     if (isWithin(protectedDir, profileDir)) {
-      throw new Error("WebView profile must be outside FeatherMD AppData");
+      throw new Error("WebView profile must be outside Hiranoa AppData");
     }
   }
 
   const env = { ...environment };
-  delete env.FEATHERMD_E2E_DISABLE_SINGLE_INSTANCE;
-  delete env.FEATHERMD_E2E_STATE_DIR;
+  delete env.HIRANOA_E2E_DISABLE_SINGLE_INSTANCE;
+  delete env.HIRANOA_E2E_STATE_DIR;
   env.APPDATA = path.win32.normalize(roamingAppDataDir);
   env.WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = `--remote-debugging-port=${port} --remote-debugging-address=${LOOPBACK_ADDRESS}`;
   env.WEBVIEW2_USER_DATA_FOLDER = profileDir;
@@ -126,15 +126,15 @@ export function preparePerformanceLaunch(
     ...options,
     roamingAppDataDir: getRoamingAppData(),
   });
-  const existing = listProcesses("feathermd.exe");
+  const existing = listProcesses("hiranoa.exe");
   if (!Array.isArray(existing)) {
-    throw new Error("FeatherMD process preflight returned an invalid result");
+    throw new Error("Hiranoa process preflight returned an invalid result");
   }
   const existingMutex = [plan.normalIdentifier, plan.performanceIdentifier].some((identifier) =>
     mutexExists(`${identifier}-sim`)
   );
   if (existing.length > 0 || existingMutex) {
-    throw new Error("FeatherMD is already running; performance launch was refused");
+    throw new Error("Hiranoa is already running; performance launch was refused");
   }
   Object.defineProperty(plan, PREPARED_PLAN, { value: true });
   return plan;

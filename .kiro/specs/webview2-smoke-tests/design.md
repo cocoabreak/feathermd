@@ -6,15 +6,15 @@
 
 ## 1. 基盤選定
 
-既存 `run-feathermd` で実績のあるWebView2 CDP接続を採用する。Node.js組み込みの `fetch` / `WebSocket` / `child_process` だけで動作し、ブラウザーバイナリやWebDriverの追加導入が不要である。
+既存 `run-hiranoa` で実績のあるWebView2 CDP接続を採用する。Node.js組み込みの `fetch` / `WebSocket` / `child_process` だけで動作し、ブラウザーバイナリやWebDriverの追加導入が不要である。
 
 - `app/scripts/webview2-driver.mjs`: 起動、CDP接続、評価、スクリーンショット、条件待機、プロセス終了の共通処理
-- `.agents/skills/run-feathermd/driver.mjs`: 共通処理を利用する対話用CLI
+- `.agents/skills/run-hiranoa/driver.mjs`: 共通処理を利用する対話用CLI
 - `app/e2e/smoke.mjs`: fixture生成とシナリオ実行を担う自動テストrunner
 
 ## 2. 起動・分離・後始末
 
-runnerは空きTCPポートをOSから取得し、`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<port>`を設定する。WebViewプロファイル、アプリ状態、fixtureは `os.tmpdir()` 配下の実行専用ディレクトリへ置く。アプリ状態には起動時更新確認OFFを事前設定し、実GitHub APIへの通信を防ぐ。debugビルド限定の `FEATHERMD_E2E_DISABLE_SINGLE_INSTANCE=1` で既存の手動起動プロセスと競合しないようにする（releaseでは環境変数を無視する）。
+runnerは空きTCPポートをOSから取得し、`WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS=--remote-debugging-port=<port>`を設定する。WebViewプロファイル、アプリ状態、fixtureは `os.tmpdir()` 配下の実行専用ディレクトリへ置く。アプリ状態には起動時更新確認OFFを事前設定し、実GitHub APIへの通信を防ぐ。debugビルド限定の `HIRANOA_E2E_DISABLE_SINGLE_INSTANCE=1` で既存の手動起動プロセスと競合しないようにする（releaseでは環境変数を無視する）。
 
 Tauri devの標準出力・標準エラーは `app/e2e/artifacts/tauri.log` へ保存する。runner全体を `try/finally` で囲み、Windowsでは `taskkill /PID <pid> /T /F` でプロセスツリーを停止し、一時ディレクトリを再試行付きで削除する。失敗時は終了前に `failure.png` を保存する。
 

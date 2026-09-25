@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "FeatherMD",
-  "version": "0.2.5",
-  "identifier": "com.cocoabreak.feathermd",
+  "productName": "Hiranoa",
+  "version": "0.3.0",
+  "identifier": "com.cocoabreak.hiranoa",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1420",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "FeatherMD",
+        "title": "Hiranoa",
         "width": 1200,
         "height": 800,
         "decorations": false,

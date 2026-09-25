@@ -128,7 +128,7 @@ pub async fn open_link_graph_window(app: AppHandle, window: WebviewWindow) -> Re
         LINK_GRAPH_WINDOW_LABEL,
         WebviewUrl::App("link-graph".into()),
     )
-    .title("FeatherMD - Link Graph")
+    .title("Hiranoa - Link Graph")
     .inner_size(900.0, 650.0)
     .min_inner_size(520.0, 360.0)
     .resizable(true)

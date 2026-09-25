@@ -2,11 +2,11 @@
 inclusion: always
 ---
 
-# FeatherMD プロダクトコンテキスト
+# Hiranoa プロダクトコンテキスト
 
 ## ビジョン
 
-FeatherMDとして、Markdownファイルを快適に閲覧・操作できるビューワーを開発する。
+Hiranoaとして、Markdownファイルを快適に閲覧・操作できるビューワーを開発する。
 
 ## 目標
 

@@ -81,7 +81,7 @@ export const en: typeof ja = {
     toggleToc: "Toggle Table of Contents",
     toggleSource: "Toggle Rendered / Source View",
     openSettings: "Open Settings",
-    about: "About FeatherMD",
+    about: "About Hiranoa",
     findInPage: "Find in Page",
     searchInExplorer: "Search in Explorer",
     zoomIn: "Zoom In",
@@ -172,12 +172,11 @@ export const en: typeof ja = {
     dialogTitle: "Expanded image",
   },
   about: {
-    title: "About FeatherMD",
+    title: "About Hiranoa",
     version: (version: string) => `Version ${version}`,
     description: "A lightweight, read-only viewer for local Markdown files.",
     copyright: "Copyright © 2026 Hirofumi Akiyama",
-    disclaimer:
-      'FeatherMD is an independent open-source project. It is not affiliated with, sponsored by, or endorsed by any other product or project named "Feather".',
+    disclaimer: "Hiranoa is an independent open-source Markdown reader.",
     github: "GitHub repository",
     pluginsAndComponents: "Plugins and components",
     installedPlugins: "Built-in plugins",
@@ -187,7 +186,7 @@ export const en: typeof ja = {
     enabled: "Enabled",
     disabled: "Disabled",
     licenses: "Licenses",
-    applicationLicense: "FeatherMD",
+    applicationLicense: "Hiranoa",
     thirdPartyLicenses: "Main components",
   },
   accessibility: {
@@ -305,7 +304,7 @@ export const en: typeof ja = {
     layout: "Layout",
     explorer: "Explorer",
     windowsIntegration: "Windows integration",
-    windowsContextMenu: 'Add "Open with FeatherMD" to the context menu',
+    windowsContextMenu: 'Add "Open with Hiranoa" to the context menu',
     windowsContextMenuDescription:
       "This does not change the default app for Markdown files (.md / .markdown).",
     windowsContextMenuLegacyNote: 'On Windows 11, it may appear under "Show more options".',

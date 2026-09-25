@@ -6,8 +6,8 @@ const app = {
   pid: 100,
   parentPid: 1,
   creationTime: "2026-08-01T00:00:00.000Z",
-  executablePath: "c:\\build\\feathermd.exe",
-  commandLine: "feathermd.exe",
+  executablePath: "c:\\build\\hiranoa.exe",
+  commandLine: "hiranoa.exe",
   workingSet64: 1000,
   privateMemorySize64: 800,
 };
@@ -77,7 +77,7 @@ test("aggregates the stable Tauri and WebView2 descendant tree", async () => {
       {
         pid: 100,
         parentPid: 1,
-        name: "feathermd.exe",
+        name: "hiranoa.exe",
         workingSet64: 1100,
         privateMemorySize64: 800,
       },

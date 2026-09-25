@@ -47,7 +47,7 @@ export function headingInlineCodeText(value: string): string {
 }
 
 /**
- * 見出し文字列をFeatherMD内で共通利用するUnicode対応slugへ正規化する。
+ * 見出し文字列をHiranoa内で共通利用するUnicode対応slugへ正規化する。
  * 空文字列のフォールバックと重複サフィックスは呼び出し側で扱う。
  */
 export function headingSlug(value: string): string {
