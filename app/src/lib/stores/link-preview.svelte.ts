@@ -20,12 +20,14 @@ export interface LinkPreviewRect {
 export type LinkPreviewReadResponse =
   | {
       status: "ready";
+      path?: string;
       rawPrefix: string;
       byteSize: number;
       truncated: boolean;
       sourceGeneration: number;
     }
-  | { status: "missing"; sourceGeneration: number };
+  | { status: "missing"; sourceGeneration: number }
+  | { status: "excluded"; sourceGeneration: number };
 
 export interface LinkPreviewTarget {
   current: DocumentRef;
@@ -42,6 +44,7 @@ type PreviewReader = (
 ) => Promise<LinkPreviewReadResponse>;
 
 interface CachedPreview {
+  path?: string;
   rawPrefix: string;
   truncated: boolean;
 }
@@ -231,7 +234,15 @@ export class LinkPreviewStore {
         this.status = "missing";
         return;
       }
-      const entry = { rawPrefix: response.rawPrefix, truncated: response.truncated };
+      if (response.status === "excluded") {
+        this.close();
+        return;
+      }
+      const entry = {
+        path: response.path,
+        rawPrefix: response.rawPrefix,
+        truncated: response.truncated,
+      };
       this.cache.set(key, entry);
       while (this.cache.size > MAX_CACHE_ENTRIES) {
         const oldest = this.cache.keys().next().value;
@@ -247,12 +258,8 @@ export class LinkPreviewStore {
   }
 
   private applyReady(target: LinkPreviewTarget, cached: CachedPreview): void {
-    this.content = extractLinkPreview(
-      cached.rawPrefix,
-      target.target.path,
-      target.anchor,
-      cached.truncated
-    );
+    this.path = cached.path ?? target.target.path;
+    this.content = extractLinkPreview(cached.rawPrefix, this.path, target.anchor, cached.truncated);
     this.status = "ready";
   }
 

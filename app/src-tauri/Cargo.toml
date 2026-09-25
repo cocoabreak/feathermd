@@ -1,6 +1,6 @@
 [package]
 name = "hiranoa"
-version = "0.3.0"
+version = "0.3.1"
 description = "Hiranoa, a lightweight read-only Markdown viewer"
 authors = ["Hirofumi Akiyama"]
 license = "MIT"

@@ -46,6 +46,7 @@
     areExternalImagesApprovedForDocument,
   } from "$lib/stores/external-image-permission";
   import { documentKey, nativeDocumentPath, resolveDocumentTarget } from "$lib/document-sources";
+  import type { DocumentRef } from "$lib/types";
   import {
     sessionUiStateStore,
     shouldRestoreScroll,
@@ -576,7 +577,21 @@
       const tab = activeTab;
       if (!tab?.document || !tab.source) return;
       const currentPath = tab.path;
-      const resolvedDocument = resolveDocumentTarget(tab.source, tab.document, filePart);
+      let resolvedDocument = resolveDocumentTarget(tab.source, tab.document, filePart);
+      if (resolvedDocument) {
+        try {
+          resolvedDocument = await invoke<DocumentRef>("resolve_source_document_link", {
+            document: resolvedDocument,
+          });
+          if (activeTab?.id !== tab.id) return;
+        } catch (err) {
+          await message(m.dialog.openFileFailed(filePart, err), {
+            title: m.common.error,
+            kind: "error",
+          });
+          return;
+        }
+      }
 
       // 同一ファイルへのリンクはアンカースクロールのみ
       if (resolvedDocument && documentKey(resolvedDocument) === currentPath && hash) {
@@ -605,7 +620,7 @@
         });
         return;
       }
-      const resolved = resolveLocalPath(nativePath, filePart);
+      let resolved = resolveLocalPath(nativePath, filePart);
 
       // 信頼ルート外のリンクはRust側のネイティブ確認でのみ認可する。
       if (!(await invoke<boolean>("is_path_allowed", { path: resolved }))) {
@@ -620,6 +635,8 @@
         }
       }
 
+      const stat = await invoke<{ is_dir: boolean } | null>("stat_path", { path: resolved });
+      if (stat?.is_dir) resolved = `${resolved.replace(/\/$/, "")}/index.md`;
       if (hash) pendingAnchor = hash;
       openMarkdownFile(resolved).catch(async (err) => {
         pendingAnchor = null;

@@ -89,6 +89,15 @@ describe("document source paths", () => {
     ["missing.md", "guide/missing.md", null],
     ["/README.md#Intro", "README.md", "Intro"],
     ["/docs/read%20me.md", "docs/read me.md", null],
+    ["./", "guide/", null],
+    ["../", "", null],
+    ["/", "", null],
+    ["sub/", "guide/sub/", null],
+    ["sub#概要", "guide/sub", "概要"],
+    ["/release.v1/", "release.v1/", null],
+    ["/日本語%20資料/", "日本語 資料/", null],
+    ["missing.v1%2F", "guide/missing.v1/", null],
+    ["image.png", "guide/image.png", null],
   ])(
     "Source相対Markdownリンク %s を受動処理用DocumentRefへ解決する",
     (target, expectedPath, expectedAnchor) => {
@@ -108,13 +117,25 @@ describe("document source paths", () => {
     "https://example.com/README.md",
     "README.md?raw=1",
     "#Intro",
-    "image.png",
+    "%00name",
     "bad\0name.md",
     "/../../secret.md",
     "/bad%encoding.md",
   ])("受動処理では絶対・Source外・非Markdownリンク %s を拒否する", (target) => {
     const base: DocumentRef = { sourceId: "native-1", path: "guide/start.md" };
     expect(resolveSourceRelativeMarkdownTarget(base, target)).toBeNull();
+  });
+
+  it.each([nativeSource, zipSource])("$kind の相対リンクを一度だけdecodeする", (source) => {
+    const base = { sourceId: source.id, path: "start.md" };
+    for (const path of ["read me", "日本語 資料", "literal%20name"]) {
+      expect(resolveDocumentTarget(source, base, `${encodeURIComponent(path)}/`)).toEqual({
+        sourceId: source.id,
+        path,
+      });
+    }
+    expect(resolveDocumentTarget(source, base, "%2E%2E/outside/")).toBeNull();
+    expect(resolveDocumentTarget(source, base, "bad%encoding/")).toBeNull();
   });
 
   it("異なるNativeソースから参照した同じ実ファイルを同一と判定する", () => {

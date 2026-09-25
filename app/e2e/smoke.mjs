@@ -143,6 +143,59 @@ try {
     );
   });
 
+  for (const kind of ["native", "zip"]) {
+    await test(`${kind}: ディレクトリーリンクのプレビュー・アンカー・タブを統一する`, async () => {
+      if (kind === "native") {
+        await open("openMarkdownFile", fixtures.directoryLinks);
+      } else {
+        await open("openArchive", fixtures.directoryArchive);
+        await driver.evaluate("window.__e2e.openArchiveEntry('directory-links.md')");
+      }
+      await driver.waitFor("document.querySelector('a[href=\"guide/#details\"]') !== null");
+      await driver.evaluate("document.querySelector('a[href=\"guide/#details\"]').focus()");
+      await driver.waitFor(
+        "document.querySelector('#link-preview-tooltip')?.textContent.includes('guide/index.md')"
+      );
+      await driver.click('a[href="guide/#details"]');
+      await driver.waitFor(
+        "document.querySelector('[role=\"main\"]')?.innerText.includes('directory-index-marker')"
+      );
+      await driver.waitFor("document.querySelector('[role=\"main\"]')?.scrollTop > 500");
+      const before = await state();
+      assert.ok(before.activeTab.path.endsWith(":guide%2Findex.md"));
+      const tabCount = await driver.evaluate("document.querySelectorAll('[data-tab-id]').length");
+      await driver.click('a[href="./#details"]');
+      assert.equal((await state()).activeTab.path, before.activeTab.path);
+      await driver.click('a[href="../directory-links.md"]');
+      await driver.waitFor("document.querySelector('a[href=\"guide\"]') !== null");
+      await driver.click('a[href="guide"]');
+      await driver.waitFor("window.__e2e.getState().activeTab.path.endsWith(':guide%2Findex.md')");
+      assert.equal((await state()).activeTab.path, before.activeTab.path);
+      await driver.click('a[href="../directory-links.md"]');
+      await driver.waitFor("document.querySelector('a[href=\"guide/index.md\"]') !== null");
+      await driver.click('a[href="guide/index.md"]');
+      await driver.waitFor("window.__e2e.getState().activeTab.path.endsWith(':guide%2Findex.md')");
+      assert.equal((await state()).activeTab.path, before.activeTab.path);
+      assert.equal(
+        await driver.evaluate("document.querySelectorAll('[data-tab-id]').length"),
+        tabCount
+      );
+      for (const name of ["read me", "日本語 資料", "literal%20name"]) {
+        await driver.click('a[href="../directory-links.md"]');
+        const selector = `a[href="${encodeURIComponent(name)}/"]`;
+        await driver.waitFor(`document.querySelector(${JSON.stringify(selector)}) !== null`);
+        await driver.click(selector);
+        const suffix = `:${encodeURIComponent(`${name}/index.md`)}`;
+        await driver.waitFor(
+          `window.__e2e.getState().activeTab.path.endsWith(${JSON.stringify(suffix)})`
+        );
+        await driver.waitFor(
+          "document.querySelector('a[href=\"../directory-links.md\"]') !== null"
+        );
+      }
+    });
+  }
+
   await test("5 MiB境界で安全モードへ切り替わる", async () => {
     await open("openMarkdownFile", fixtures.belowLimit);
     assert.equal((await state()).activeTab.renderMode, "full");

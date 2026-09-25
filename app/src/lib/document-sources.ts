@@ -1,5 +1,4 @@
 import { invoke } from "@tauri-apps/api/core";
-import { isMarkdownPath } from "$lib/markdown/extensions";
 import type { DocumentRef, DocumentSourceInfo, FileEntry } from "$lib/types";
 import { normalizePath } from "$lib/utils";
 
@@ -128,7 +127,7 @@ export interface SourceRelativeMarkdownTarget {
 }
 
 /**
- * 索引やプレビュー等の受動処理向けに、Source相対のMarkdown文書リンクだけを解決する。
+ * 受動処理向けにSource相対リンク候補を解決する。ファイル種別・directory indexはRustで判定する。
  * 絶対パスを扱う既存の明示クリック経路とは意図的に分離する。
  */
 export function resolveSourceRelativeMarkdownTarget(
@@ -144,7 +143,7 @@ export function resolveSourceRelativeMarkdownTarget(
   const rawAnchor = hashIndex >= 0 ? trimmed.slice(hashIndex + 1).trim() : "";
   if (
     !target ||
-    !isMarkdownPath(target) ||
+    target.includes("\0") ||
     /^[A-Za-z][A-Za-z0-9+.-]*:/.test(target) ||
     target.startsWith("//")
   ) {
@@ -154,6 +153,8 @@ export function resolveSourceRelativeMarkdownTarget(
   const document = target.startsWith("/")
     ? resolveSourceRootPath(base, target)
     : resolveDocumentPath(base, target);
+  // 未存在のドット付きディレクトリーもRust側でmissingと判定できるよう末尾を保持する。
+  if (document?.path && /[\\/]$/.test(target)) document.path += "/";
   return document ? { document, anchor: rawAnchor || null } : null;
 }
 
@@ -181,7 +182,7 @@ export function resolveDocumentTarget(
     }
     return null;
   }
-  return resolveDocumentPath(base, target);
+  return resolveDocumentPath(base, normalizedTarget);
 }
 
 export async function registerNativeSource(rootPath: string): Promise<DocumentSourceInfo> {

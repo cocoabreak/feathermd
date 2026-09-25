@@ -14,33 +14,52 @@ function crc32(buffer) {
 }
 
 function createStoredZip(entryName, content) {
-  const name = Buffer.from(entryName);
-  const data = Buffer.from(content);
-  const crc = crc32(data);
-  const local = Buffer.alloc(30);
-  local.writeUInt32LE(0x04034b50, 0);
-  local.writeUInt16LE(20, 4);
-  local.writeUInt32LE(crc, 14);
-  local.writeUInt32LE(data.length, 18);
-  local.writeUInt32LE(data.length, 22);
-  local.writeUInt16LE(name.length, 26);
+  return createStoredZipEntries([[entryName, content]]);
+}
 
-  const central = Buffer.alloc(46);
-  central.writeUInt32LE(0x02014b50, 0);
-  central.writeUInt16LE(20, 4);
-  central.writeUInt16LE(20, 6);
-  central.writeUInt32LE(crc, 16);
-  central.writeUInt32LE(data.length, 20);
-  central.writeUInt32LE(data.length, 24);
-  central.writeUInt16LE(name.length, 28);
+function createStoredZipEntries(entries) {
+  const locals = [];
+  const centrals = [];
+  let offset = 0;
+  for (const [entryName, content] of entries) {
+    const name = Buffer.from(entryName);
+    const data = Buffer.from(content);
+    const crc = crc32(data);
+    const local = Buffer.alloc(30);
+    local.writeUInt32LE(0x04034b50, 0);
+    local.writeUInt16LE(20, 4);
+    local.writeUInt16LE(0x0800, 6);
+    local.writeUInt32LE(crc, 14);
+    local.writeUInt32LE(data.length, 18);
+    local.writeUInt32LE(data.length, 22);
+    local.writeUInt16LE(name.length, 26);
+
+    const central = Buffer.alloc(46);
+    central.writeUInt32LE(0x02014b50, 0);
+    central.writeUInt16LE(20, 4);
+    central.writeUInt16LE(20, 6);
+    central.writeUInt16LE(0x0800, 8);
+    central.writeUInt32LE(crc, 16);
+    central.writeUInt32LE(data.length, 20);
+    central.writeUInt32LE(data.length, 24);
+    central.writeUInt16LE(name.length, 28);
+    central.writeUInt32LE(offset, 42);
+    const localEntry = Buffer.concat([local, name, data]);
+    locals.push(localEntry);
+    centrals.push(Buffer.concat([central, name]));
+    offset += localEntry.length;
+  }
 
   const end = Buffer.alloc(22);
   end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(1, 8);
-  end.writeUInt16LE(1, 10);
-  end.writeUInt32LE(central.length + name.length, 12);
-  end.writeUInt32LE(local.length + name.length + data.length, 16);
-  return Buffer.concat([local, name, data, central, name, end]);
+  end.writeUInt16LE(entries.length, 8);
+  end.writeUInt16LE(entries.length, 10);
+  end.writeUInt32LE(
+    centrals.reduce((size, entry) => size + entry.length, 0),
+    12
+  );
+  end.writeUInt32LE(offset, 16);
+  return Buffer.concat([...locals, ...centrals, end]);
 }
 
 function fixedSizeMarkdown(size, heading) {
@@ -83,5 +102,41 @@ export function createFixtures(root) {
   writeFileSync(belowLimit, fixedSizeMarkdown(LARGE_MARKDOWN_BYTES - 1, "Below limit"));
   writeFileSync(atLimit, fixedSizeMarkdown(LARGE_MARKDOWN_BYTES, "At limit"));
   writeFileSync(archive, createStoredZip("inside.md", "# Archive\n\nzip-smoke-marker\n"));
-  return { basic, validMermaid, invalidMermaid, belowLimit, atLimit, archive };
+  const directoryLinks = path.join(root, "directory-links.md");
+  const directoryArchive = path.join(root, "directory-links.zip");
+  const directoryEntries = [
+    [
+      "directory-links.md",
+      "# Directory links\n\n[slash](guide/#details) [bare](guide) [direct](guide/index.md) [missing](empty/) [image](image.png)\n",
+    ],
+    [
+      "guide/index.md",
+      `# Directory index\n\ndirectory-index-marker\n\n${"paragraph\n\n".repeat(100)}## Details\n\ndirectory-anchor-marker\n\n[self](./#details) [back](../directory-links.md)\n`,
+    ],
+    ["empty/README.md", "# No fallback"],
+    ["image.png", "not-an-image"],
+  ];
+  for (const name of ["read me", "日本語 資料", "literal%20name"]) {
+    directoryEntries[0][1] += `\n[encoded](${encodeURIComponent(name)}/)\n`;
+    directoryEntries.push([
+      `${name}/index.md`,
+      "# Encoded directory\n\n[back](../directory-links.md)\n",
+    ]);
+  }
+  for (const [name, content] of directoryEntries) {
+    const file = path.join(root, name);
+    mkdirSync(path.dirname(file), { recursive: true });
+    writeFileSync(file, content);
+  }
+  writeFileSync(directoryArchive, createStoredZipEntries(directoryEntries));
+  return {
+    basic,
+    validMermaid,
+    invalidMermaid,
+    belowLimit,
+    atLimit,
+    archive,
+    directoryLinks,
+    directoryArchive,
+  };
 }

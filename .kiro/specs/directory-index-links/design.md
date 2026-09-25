@@ -1,0 +1,13 @@
+# 設計
+
+ステータス: 完了
+
+RustのSource層にディレクトリー判定とindex.mdへの解決処理を集約する。Nativeでは実体がディレクトリーかを確認し、既存のcanonical path / AllowedRoots検査を経て解決する。ZIPでは既存のエントリ索引（暗黙ディレクトリーを含む）を使用する。index.mdがなくても候補を返し、既存の読込・リンク切れ判定で失敗を扱う。
+
+明示クリックはmainウィンドウ専用のresolve_source_document_linkコマンドで解決し、そのDocumentRefを既存の同一文書判定とopenSourceMarkdownへ渡す。Source外のNativeリンクは従来の信頼確認を経た後にディレクトリー判定を行う。
+
+受動プレビューでは相対リンク候補をRustへ渡し、ディレクトリー解決後にMarkdownを読み取る。通常の非Markdownファイルはexcludedとして表示を閉じる。ready応答に解決後のpathを含め、プレビューの表示名とキャッシュに反映する。既存のSource generationとrequest IDで古い結果を破棄する。
+
+リンク抽出はローカルパス候補を取得し、索引構築時に同じディレクトリー解決処理を適用する。非Markdownファイルは索引から除外し、Markdown・ディレクトリー候補の欠落はmissingとする。既存の候補件数・文字列・読込上限を維持する。解決後のindex.mdをバックリンク・グラフ・見出し検査へ渡す。
+
+ZIPの大文字小文字の区別、Nativeのファイルシステムによる名前解決は従来の規則に従う。index.markdownやREADME.mdの探索は追加しない。

@@ -2,6 +2,12 @@
 
 All notable changes to Hiranoa (formerly FeatherMD) are documented in this file.
 
+## [0.3.1] - 2026-09-25
+
+### Added
+
+- Open a directory's `index.md` from Markdown links, with or without a trailing slash, in local folders and ZIP archives. Heading anchors, previews, backlinks, the link graph, and link validation resolve to the same document. Directories without `index.md` remain missing links; no README fallback is applied.
+
 ## [0.3.0] - 2026-09-25
 
 ### Changed

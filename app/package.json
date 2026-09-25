@@ -1,6 +1,6 @@
 {
   "name": "hiranoa",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "A fast, read-only Markdown viewer for local files.",
   "type": "module",
   "repository": {
