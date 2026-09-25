@@ -58,6 +58,7 @@ fn main() {
             "list_source_entries",
             "list_source_markdown_documents",
             "read_source_link_preview",
+            "resolve_source_document_link",
             "read_source_markdown",
             "read_source_image",
             "search_source",

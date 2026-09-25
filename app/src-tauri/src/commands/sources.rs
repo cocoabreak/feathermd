@@ -274,6 +274,7 @@ pub struct ReferenceValidationResponse {
 #[serde(tag = "status", rename_all = "camelCase")]
 pub enum LinkPreviewReadResponse {
     Ready {
+        path: String,
         #[serde(rename = "rawPrefix")]
         raw_prefix: String,
         #[serde(rename = "byteSize")]
@@ -283,6 +284,10 @@ pub enum LinkPreviewReadResponse {
         source_generation: u64,
     },
     Missing {
+        #[serde(rename = "sourceGeneration")]
+        source_generation: u64,
+    },
+    Excluded {
         #[serde(rename = "sourceGeneration")]
         source_generation: u64,
     },
@@ -627,6 +632,82 @@ fn resolve_native_path(
 
 fn is_path_within_native_source(source: &NativeSource, path: &Path) -> bool {
     path.starts_with(&source.root)
+}
+
+/// Resolve directories only; missing index files are handled by the existing readers.
+fn resolve_directory_index(
+    backend: &SourceBackend,
+    path: &str,
+    roots: &AllowedRoots,
+) -> Result<String, String> {
+    let relative = normalize_virtual_path(path)?;
+    let is_directory = match backend {
+        SourceBackend::Native(source) => match std::fs::metadata(source.root.join(&relative)) {
+            Ok(metadata) if metadata.is_dir() => {
+                resolve_native_path(source, &relative, roots)?;
+                true
+            }
+            Ok(_) => false,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => false,
+            Err(error) => return Err(format!("リンク先を確認できませんでした: {error}")),
+        },
+        SourceBackend::Zip(source) => {
+            relative.is_empty()
+                || source
+                    .entries
+                    .get(&relative)
+                    .is_some_and(|entry| entry.kind == ZipEntryKind::Directory)
+        }
+    };
+    if is_directory {
+        let index = if relative.is_empty() {
+            "index.md".to_string()
+        } else {
+            format!("{relative}/index.md")
+        };
+        if let SourceBackend::Native(source) = backend {
+            if std::fs::symlink_metadata(source.root.join(&index)).is_ok() {
+                resolve_native_path(source, &index, roots)?;
+            }
+        }
+        Ok(index)
+    } else {
+        Ok(relative)
+    }
+}
+
+fn is_markdown_link_candidate(backend: &SourceBackend, path: &str, raw_target: &str) -> bool {
+    if is_markdown_virtual_path(path) {
+        return true;
+    }
+    let is_file = match backend {
+        SourceBackend::Native(source) => source.root.join(path).is_file(),
+        SourceBackend::Zip(source) => source
+            .entries
+            .get(path)
+            .is_some_and(|entry| entry.kind == ZipEntryKind::File),
+    };
+    !is_file
+        && (Path::new(path).extension().is_none()
+            || raw_target.ends_with('/')
+            || raw_target.ends_with('\\'))
+}
+
+#[tauri::command(async)]
+pub fn resolve_source_document_link(
+    document: DocumentRef,
+    window: WebviewWindow,
+    roots: State<'_, AllowedRoots>,
+    registry: State<'_, SourceRegistry>,
+) -> Result<DocumentRef, String> {
+    if window.label() != MAIN_WINDOW_LABEL {
+        return Err("このウィンドウからは実行できません".to_string());
+    }
+    let backend = registry.get(&document.source_id)?;
+    Ok(DocumentRef {
+        path: resolve_directory_index(&backend, &document.path, &roots)?,
+        ..document
+    })
 }
 
 fn is_markdown_virtual_path(path: &str) -> bool {
@@ -1386,6 +1467,7 @@ fn read_native_link_preview(
     }
     let (raw_prefix, truncated) = decode_link_preview_prefix(bytes, byte_size)?;
     Ok(LinkPreviewReadResponse::Ready {
+        path: target.path.clone(),
         raw_prefix,
         byte_size,
         truncated,
@@ -1454,6 +1536,7 @@ fn read_zip_link_preview(
     }
     let (raw_prefix, truncated) = decode_link_preview_prefix(bytes, byte_size)?;
     Ok(LinkPreviewReadResponse::Ready {
+        path: target.path.clone(),
         raw_prefix,
         byte_size,
         truncated,
@@ -1508,9 +1591,32 @@ pub fn read_source_link_preview(
     ensure_same_preview_source(&current, &target)?;
     let (backend, source_generation) = registry.get_with_generation(&current.source_id)?;
     validate_preview_origin(backend.as_ref(), &current, &roots)?;
-    match backend.as_ref() {
+    read_resolved_link_preview(&backend, target, &roots, source_generation)
+}
+
+fn read_resolved_link_preview(
+    backend: &SourceBackend,
+    target: DocumentRef,
+    roots: &AllowedRoots,
+    source_generation: u64,
+) -> Result<LinkPreviewReadResponse, String> {
+    let raw_target = target.path.clone();
+    let target = DocumentRef {
+        path: resolve_directory_index(backend, &target.path, roots)?,
+        ..target
+    };
+    if !is_markdown_virtual_path(&target.path) {
+        return Ok(
+            if is_markdown_link_candidate(backend, &target.path, &raw_target) {
+                LinkPreviewReadResponse::Missing { source_generation }
+            } else {
+                LinkPreviewReadResponse::Excluded { source_generation }
+            },
+        );
+    }
+    match backend {
         SourceBackend::Native(source) => {
-            read_native_link_preview(source, &target, &roots, source_generation)
+            read_native_link_preview(source, &target, roots, source_generation)
         }
         SourceBackend::Zip(source) => read_zip_link_preview(source, &target, source_generation),
     }
@@ -1963,13 +2069,9 @@ fn extract_markdown_links(raw: &str, limit: usize) -> (Vec<ExtractedDocumentLink
         let Some((target, anchor)) = split_link_target(destination) else {
             continue;
         };
-        let Some(decoded_target) = decode_percent_encoded_target(&target) else {
+        let Some(_) = decode_percent_encoded_target(&target) else {
             continue;
         };
-        let target_lower = decoded_target.to_ascii_lowercase();
-        if !target_lower.ends_with(".md") && !target_lower.ends_with(".markdown") {
-            continue;
-        }
         if target.len() > super::wiki::MAX_WIKI_TARGET_BYTES {
             return (links, true);
         }
@@ -2280,6 +2382,7 @@ fn resolve_markdown_link(
     backend: &SourceBackend,
     exact_paths: &HashSet<String>,
     native_paths_lower: &HashMap<String, String>,
+    roots: &AllowedRoots,
 ) -> MarkdownLinkResolution {
     let Some(decoded_target) = decode_percent_encoded_target(raw_target) else {
         return MarkdownLinkResolution::Excluded;
@@ -2307,7 +2410,7 @@ fn resolve_markdown_link(
     } else {
         format!("{parent}/{normalized_target}")
     };
-    let Ok(resolved) = normalize_virtual_path(&combined) else {
+    let Ok(resolved) = resolve_directory_index(backend, &combined, roots) else {
         return MarkdownLinkResolution::Excluded;
     };
     if exact_paths.contains(&resolved) {
@@ -2318,7 +2421,11 @@ fn resolve_markdown_link(
             return MarkdownLinkResolution::Resolved(actual.clone());
         }
     }
-    MarkdownLinkResolution::Missing
+    if is_markdown_link_candidate(backend, &resolved, &combined) {
+        MarkdownLinkResolution::Missing
+    } else {
+        MarkdownLinkResolution::Excluded
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -2440,6 +2547,7 @@ fn build_link_index(
                     backend,
                     &exact_paths,
                     &native_paths_lower,
+                    roots,
                 ) {
                     MarkdownLinkResolution::Resolved(resolved) => Some(resolved),
                     MarkdownLinkResolution::Missing => None,
@@ -2873,6 +2981,7 @@ fn build_reference_validation_with_limits(
                     &backend,
                     &exact_paths,
                     &native_paths_lower,
+                    roots,
                 ) {
                     MarkdownLinkResolution::Resolved(resolved) => Some(resolved),
                     MarkdownLinkResolution::Missing | MarkdownLinkResolution::Excluded => None,
@@ -3470,6 +3579,7 @@ mod tests {
     #[test]
     fn link_preview_response_uses_frontend_camel_case_contract() {
         let ready = serde_json::to_value(LinkPreviewReadResponse::Ready {
+            path: "target.md".to_string(),
             raw_prefix: "# Preview".to_string(),
             byte_size: 9,
             truncated: false,
@@ -3561,7 +3671,8 @@ mod tests {
 "#;
         let (links, truncated) = extract_markdown_links(raw, 20);
         assert!(!truncated);
-        assert_eq!(links.len(), 3);
+        assert_eq!(links.len(), 4);
+        assert_eq!(links[3].raw_target, "guide/file.txt");
         assert_eq!(links[0].raw_target, "guide/target.md");
         assert_eq!(links[0].anchor.as_deref(), Some("Section"));
         assert_eq!(links[1].raw_target, "guide/reference.markdown");
@@ -3593,15 +3704,22 @@ mod tests {
         ]);
 
         assert!(matches!(
-            resolve_markdown_link("guide/current.md", "../target.md", &backend, &paths, &lower),
+            resolve_markdown_link("guide/current.md", "../target.md", &backend, &paths, &lower, &roots),
             MarkdownLinkResolution::Resolved(path) if path == "target.md"
         ));
         assert!(matches!(
-            resolve_markdown_link("guide/current.md", "missing.md", &backend, &paths, &lower),
+            resolve_markdown_link(
+                "guide/current.md",
+                "missing.md",
+                &backend,
+                &paths,
+                &lower,
+                &roots
+            ),
             MarkdownLinkResolution::Missing
         ));
         assert!(matches!(
-            resolve_markdown_link("guide/current.md", "/target.md", &backend, &paths, &lower),
+            resolve_markdown_link("guide/current.md", "/target.md", &backend, &paths, &lower, &roots),
             MarkdownLinkResolution::Resolved(path) if path == "target.md"
         ));
         assert!(matches!(
@@ -3610,7 +3728,8 @@ mod tests {
                 "/../../outside.md",
                 &backend,
                 &paths,
-                &lower
+                &lower,
+                &roots
             ),
             MarkdownLinkResolution::Excluded
         ));
@@ -3620,7 +3739,8 @@ mod tests {
                 "../../outside.md",
                 &backend,
                 &paths,
-                &lower
+                &lower,
+                &roots
             ),
             MarkdownLinkResolution::Excluded
         ));
@@ -3630,7 +3750,8 @@ mod tests {
                 "C:/outside.md",
                 &backend,
                 &paths,
-                &lower
+                &lower,
+                &roots
             ),
             MarkdownLinkResolution::Excluded
         ));
@@ -3640,7 +3761,8 @@ mod tests {
                 "C:/notes/target.md",
                 &backend,
                 &paths,
-                &lower
+                &lower,
+                &roots
             ),
             MarkdownLinkResolution::Excluded
         ));
@@ -3650,24 +3772,39 @@ mod tests {
                 "//server/share/target.md",
                 &backend,
                 &paths,
-                &lower
+                &lower,
+                &roots
             ),
             MarkdownLinkResolution::Excluded
         ));
         assert!(matches!(
-            resolve_markdown_link("guide/current.md", "bad\0name.md", &backend, &paths, &lower),
+            resolve_markdown_link(
+                "guide/current.md",
+                "bad\0name.md",
+                &backend,
+                &paths,
+                &lower,
+                &roots
+            ),
             MarkdownLinkResolution::Excluded
         ));
         assert!(matches!(
-            resolve_markdown_link("guide/current.md", "/read%20me.md", &backend, &paths, &lower),
+            resolve_markdown_link("guide/current.md", "/read%20me.md", &backend, &paths, &lower, &roots),
             MarkdownLinkResolution::Resolved(path) if path == "read me.md"
         ));
         assert!(matches!(
-            resolve_markdown_link("guide/current.md", "/https:note.md", &backend, &paths, &lower),
+            resolve_markdown_link("guide/current.md", "/https:note.md", &backend, &paths, &lower, &roots),
             MarkdownLinkResolution::Resolved(path) if path == "https:note.md"
         ));
         assert!(matches!(
-            resolve_markdown_link("guide/current.md", "/bad%2", &backend, &paths, &lower),
+            resolve_markdown_link(
+                "guide/current.md",
+                "/bad%2",
+                &backend,
+                &paths,
+                &lower,
+                &roots
+            ),
             MarkdownLinkResolution::Excluded
         ));
         assert!(matches!(
@@ -3676,7 +3813,8 @@ mod tests {
                 "https%3A%2F%2Fexample.com%2Ftarget.md",
                 &backend,
                 &paths,
-                &lower
+                &lower,
+                &roots
             ),
             MarkdownLinkResolution::Excluded
         ));
@@ -4330,6 +4468,167 @@ mod tests {
         let broken = &index.edges[index.broken_by_source["guide/current.md"][0]];
         assert!(broken.target_path.is_none());
         assert_eq!(broken.raw_target.as_deref(), Some("missing.md"));
+    }
+
+    #[test]
+    fn directory_links_share_navigation_preview_index_and_heading_targets() {
+        let directory = tempfile::tempdir().unwrap();
+        let entries: &[(&str, &[u8])] = &[
+            ("start.md", b"[slash](guide/#Details) [bare](guide#Details) [root](/#Home) [missing](empty/) [file](plain.md) [attachment](LICENSE) [image](image.png) [dot](release.v1/) [encoded](read%20me/)"),
+            ("index.md", b"# Home"),
+            ("guide/index.md", b"# Guide\n\n## Details\n\npreview-marker\n\n[parent](../#Home) [self](./#Details)"),
+            ("empty/README.md", b"# Not an index"),
+            ("plain.md", b"# Plain"),
+            ("LICENSE", b"attachment"),
+            ("image.png", b"image"),
+            ("release.v1/index.md", b"# Versioned"),
+            ("read me/index.md", b"# Spaces"),
+        ];
+        for (name, bytes) in entries {
+            let path = directory.path().join(name);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        }
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        let native = SourceBackend::Native(NativeSource {
+            root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
+        });
+        let archive = directory.path().join("docs.zip");
+        create_zip(&archive, entries);
+        let zip = SourceBackend::Zip(
+            build_zip_source(roots.resolve(&archive.to_string_lossy()).unwrap(), &roots).unwrap(),
+        );
+        for backend in [native, zip] {
+            for (input, expected) in [
+                ("guide", "guide/index.md"),
+                ("guide/", "guide/index.md"),
+                ("guide/.", "guide/index.md"),
+                ("guide/..", "index.md"),
+                ("", "index.md"),
+                ("plain.md", "plain.md"),
+                ("empty", "empty/index.md"),
+                ("missing.md", "missing.md"),
+                ("release.v1", "release.v1/index.md"),
+            ] {
+                assert_eq!(
+                    resolve_directory_index(&backend, input, &roots).unwrap(),
+                    expected
+                );
+            }
+            for path in ["../outside", "/outside", "C:/outside", "bad\0name"] {
+                assert!(resolve_directory_index(&backend, path, &roots).is_err());
+            }
+            let document = |path: &str| DocumentRef {
+                source_id: "source".into(),
+                path: path.into(),
+            };
+            assert!(
+                matches!(read_resolved_link_preview(&backend, document("guide"), &roots, 2).unwrap(),
+                LinkPreviewReadResponse::Ready { path, raw_prefix, source_generation: 2, .. }
+                    if path == "guide/index.md" && raw_prefix.contains("preview-marker"))
+            );
+            assert!(matches!(
+                read_resolved_link_preview(&backend, document("empty"), &roots, 2).unwrap(),
+                LinkPreviewReadResponse::Missing { .. }
+            ));
+            assert!(matches!(
+                read_resolved_link_preview(&backend, document("missing.v1/"), &roots, 2).unwrap(),
+                LinkPreviewReadResponse::Missing { .. }
+            ));
+            for path in ["LICENSE", "image.png"] {
+                assert!(matches!(
+                    read_resolved_link_preview(&backend, document(path), &roots, 2).unwrap(),
+                    LinkPreviewReadResponse::Excluded { .. }
+                ));
+            }
+            let index = build_link_index(&backend, true, false, false, &roots).unwrap();
+            let incoming = &index.incoming_by_target["guide/index.md"];
+            assert!(incoming
+                .iter()
+                .any(|id| index.edges[*id].source_path == "start.md"
+                    && index.edges[*id].anchor.as_deref() == Some("Details")));
+            assert_eq!(index.broken_by_source["start.md"].len(), 1);
+            assert_eq!(
+                index.edges[index.broken_by_source["start.md"][0]]
+                    .raw_target
+                    .as_deref(),
+                Some("empty/")
+            );
+            for path in [
+                "index.md",
+                "plain.md",
+                "release.v1/index.md",
+                "read me/index.md",
+            ] {
+                assert!(index.incoming_by_target.contains_key(path), "{path}");
+            }
+            let registry = SourceRegistry::new();
+            let source = match backend {
+                SourceBackend::Native(source) => registry.register_native(source.root).unwrap(),
+                SourceBackend::Zip(source) => registry.register_zip(source).unwrap(),
+            };
+            let validation = build_reference_validation(
+                &DocumentRef {
+                    source_id: source.id,
+                    path: "start.md".into(),
+                },
+                false,
+                false,
+                &roots,
+                &registry,
+            )
+            .unwrap();
+            assert!(validation
+                .heading_references
+                .iter()
+                .any(|reference| reference.document.path == "guide/index.md"));
+        }
+    }
+
+    #[cfg(any(unix, windows))]
+    #[test]
+    fn directory_index_rejects_symlink_escape_even_to_another_trusted_root() {
+        let directory = tempfile::tempdir().unwrap();
+        let outside = tempfile::tempdir().unwrap();
+        std::fs::write(outside.path().join("index.md"), "secret").unwrap();
+        let link = directory.path().join("escape");
+        #[cfg(unix)]
+        let result = std::os::unix::fs::symlink(outside.path(), &link);
+        #[cfg(windows)]
+        let result = std::os::windows::fs::symlink_dir(outside.path(), &link);
+        if let Err(error) = result {
+            #[cfg(windows)]
+            if error.raw_os_error() == Some(1314) {
+                eprintln!("symlink test requires Developer Mode or symlink privilege");
+                return;
+            }
+            panic!("cannot create test symlink: {error}");
+        }
+        let roots = AllowedRoots::new();
+        roots.register(&directory.path().to_string_lossy()).unwrap();
+        roots.register(&outside.path().to_string_lossy()).unwrap();
+        let backend = SourceBackend::Native(NativeSource {
+            root: roots.resolve(&directory.path().to_string_lossy()).unwrap(),
+        });
+        assert!(resolve_directory_index(&backend, "escape", &roots).is_err());
+        assert!(read_resolved_link_preview(
+            &backend,
+            DocumentRef {
+                source_id: "native".into(),
+                path: "escape".into()
+            },
+            &roots,
+            0
+        )
+        .is_err());
+        std::fs::create_dir(directory.path().join("guide")).unwrap();
+        let index = directory.path().join("guide/index.md");
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(outside.path().join("index.md"), index).unwrap();
+        #[cfg(windows)]
+        std::os::windows::fs::symlink_file(outside.path().join("index.md"), index).unwrap();
+        assert!(resolve_directory_index(&backend, "guide", &roots).is_err());
     }
 
     #[test]

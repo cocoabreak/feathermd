@@ -9,6 +9,51 @@ describe("LinkPreviewStore", () => {
   beforeEach(() => vi.useFakeTimers());
   afterEach(() => vi.useRealTimers());
 
+  it("ディレクトリーの解決先を表示しキャッシュでも保持する", async () => {
+    const reader = vi.fn(async (): Promise<LinkPreviewReadResponse> => ({
+      status: "ready",
+      path: "guide/index.md",
+      rawPrefix: "# Guide\n\n## Details\n\nbody",
+      byteSize: 32,
+      truncated: false,
+      sourceGeneration: 1,
+    }));
+    const store = new LinkPreviewStore(reader);
+    const input = {
+      current,
+      target: { ...target, path: "guide" },
+      sourceGeneration: 1,
+      anchor: "details",
+      getRect: rect,
+    };
+    store.begin(input, 0);
+    await vi.runAllTimersAsync();
+    expect(store.status).toBe("ready");
+    expect(store.path).toBe("guide/index.md");
+    store.close();
+    store.begin(input, 0);
+    await vi.runAllTimersAsync();
+    expect(store.path).toBe("guide/index.md");
+    expect(reader).toHaveBeenCalledOnce();
+  });
+
+  it("通常の非Markdownファイルではプレビューを表示しない", async () => {
+    const store = new LinkPreviewStore(async () => ({ status: "excluded", sourceGeneration: 1 }));
+    store.begin(
+      {
+        current,
+        target: { ...target, path: "image.png" },
+        sourceGeneration: 1,
+        anchor: null,
+        getRect: rect,
+      },
+      0
+    );
+    await vi.runAllTimersAsync();
+    expect(store.visible).toBe(false);
+    expect(store.status).toBe("idle");
+  });
+
   it("450ms未満の離脱では読み込まない", async () => {
     const reader = vi.fn<() => Promise<LinkPreviewReadResponse>>();
     const store = new LinkPreviewStore(reader);
